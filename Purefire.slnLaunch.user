@@ -1,0 +1,15 @@
+[
+  {
+    "Name": "All",
+    "Projects": [
+      {
+        "Path": "api1\\api1.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "api2\\api2.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]
