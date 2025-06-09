@@ -1,9 +1,9 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.OpenApi.Models;
 using Purefire.Auth.Data;
 using Purefire.Auth.Extensions;
+using Purefire.Auth.Models;
 using System.Reflection;
-using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -92,7 +92,9 @@ using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     var context = services.GetRequiredService<AuthDbContext>();
-    await DbSeeder.SeedDataAsync(context);
+    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+    await DbSeeder.SeedDataAsync(context, userManager, roleManager);
 }
 
 // Configure the HTTP request pipeline.

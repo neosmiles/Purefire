@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "api1", "api1\api1.csproj", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "api2", "api2\api2.csproj", "{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Purefire.Auth", "Purefire.Auth\Purefire.Auth.csproj", "{7E36D980-1011-52F1-8B26-53B9C7F2A02C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E36D980-1011-52F1-8B26-53B9C7F2A02C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E36D980-1011-52F1-8B26-53B9C7F2A02C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E36D980-1011-52F1-8B26-53B9C7F2A02C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E36D980-1011-52F1-8B26-53B9C7F2A02C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

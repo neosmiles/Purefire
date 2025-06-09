@@ -1,37 +1,68 @@
-using BCrypt.Net;
+using Microsoft.AspNetCore.Identity;
 using Purefire.Auth.Models;
 
 namespace Purefire.Auth.Data
 {
     public static class DbSeeder
     {
-        public static async Task SeedDataAsync(AuthDbContext context)
+        public static async Task SeedDataAsync(
+            AuthDbContext context,
+            UserManager<ApplicationUser> userManager,
+            RoleManager<IdentityRole> roleManager)
         {
-            if (!context.Users.Any())
+            // Seed roles if they don't exist
+            if (!await roleManager.RoleExistsAsync("Admin"))
             {
-                var users = new List<User>
-                {
-                    new User
-                    {
-                        Username = "admin",
-                        Email = "admin@example.com",
-                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin123!"),
-                        Role = "Admin",
-                        CreatedAt = DateTime.UtcNow
-                    },
-                    new User
-                    {
-                        Username = "user",
-                        Email = "user@example.com",
-                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("User123!"),
-                        Role = "User",
-                        CreatedAt = DateTime.UtcNow
-                    }
-                };
-
-                await context.Users.AddRangeAsync(users);
+                await roleManager.CreateAsync(new IdentityRole("Admin"));
+            }
+            if (!await roleManager.RoleExistsAsync("User"))
+            {
+                await roleManager.CreateAsync(new IdentityRole("User"));
             }
 
+            // Seed admin user if it doesn't exist
+            var adminEmail = "admin@example.com";
+            var adminUser = await userManager.FindByEmailAsync(adminEmail);
+            if (adminUser == null)
+            {
+                adminUser = new ApplicationUser
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    EmailConfirmed = true,
+                    FirstName = "Admin",
+                    LastName = "User"
+                };
+
+                var result = await userManager.CreateAsync(adminUser, "Admin123!");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(adminUser, "Admin");
+                }
+            }
+
+            // Seed regular user if it doesn't exist
+            var userEmail = "user@example.com";
+            var regularUser = await userManager.FindByEmailAsync(userEmail);
+            if (regularUser == null)
+            {
+                regularUser = new ApplicationUser
+                {
+                    UserName = userEmail,
+                    Email = userEmail,
+                    EmailConfirmed = true,
+                    FirstName = "Regular",
+                    LastName = "User"
+                };
+
+                var result = await userManager.CreateAsync(regularUser, "User123!");
+                if (result.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(regularUser, "User");
+                }
+            }
+
+            // Seed clients if they don't exist
             if (!context.Clients.Any())
             {
                 var clients = new List<Client>
@@ -55,9 +86,8 @@ namespace Purefire.Auth.Data
                 };
 
                 await context.Clients.AddRangeAsync(clients);
+                await context.SaveChangesAsync();
             }
-
-            await context.SaveChangesAsync();
         }
     }
 }

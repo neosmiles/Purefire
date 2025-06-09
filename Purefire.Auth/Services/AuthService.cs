@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -13,99 +14,155 @@ namespace Purefire.Auth.Services
 {
     public interface IAuthService
     {
-        Task<(bool success, string token)> AuthenticateUserAsync(string username, string password);
-        Task<(bool success, string token)> AuthenticateClientAsync(string clientId, string clientSecret);
+        Task<(bool success, string token)> LoginAsync(string email, string password);
+        Task<(bool success, string token)> LoginServiceClientAsync(string clientId, string clientSecret);
+        Task<(bool success, string message)> RegisterAsync(string email, string password, string firstName, string lastName);
+        Task<(bool success, string message)> CreateClientAsync(string clientId, string clientSecret, string name, string[] allowedScopes);
     }
 
     public class AuthService : IAuthService
     {
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly AuthDbContext _context;
         private readonly IConfiguration _configuration;
 
-        public AuthService(AuthDbContext context, IConfiguration configuration)
+        public AuthService(
+            UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager,
+            AuthDbContext context,
+            IConfiguration configuration)
         {
+            _userManager = userManager;
+            _signInManager = signInManager;
             _context = context;
             _configuration = configuration;
         }
 
-        public async Task<(bool success, string token)> AuthenticateUserAsync(string username, string password)
+        public async Task<(bool success, string token)> LoginAsync(string email, string password)
         {
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Username == username);
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null)
+            {
+                return (false, "Invalid email or password");
+            }
 
-            if (user == null || !VerifyPassword(password, user.PasswordHash))
-                return (false, null);
+            var result = await _signInManager.CheckPasswordSignInAsync(user, password, false);
+            if (!result.Succeeded)
+            {
+                return (false, "Invalid email or password");
+            }
 
+            // Update last login
             user.LastLoginAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
+            await _userManager.UpdateAsync(user);
 
-            return (true, GenerateJwtToken(user));
+            var token = GenerateJwtToken(user);
+            return (true, token);
         }
 
-        public async Task<(bool success, string token)> AuthenticateClientAsync(string clientId, string clientSecret)
+        public async Task<(bool success, string token)> LoginServiceClientAsync(string clientId, string clientSecret)
         {
-            var client = await _context.Clients
-                .FirstOrDefaultAsync(c => c.ClientId == clientId);
-
-            if (client == null || client.ClientSecret != clientSecret)
-                return (false, null);
-
-            client.LastUsedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            return (true, GenerateJwtToken(client));
-        }
-
-        private string GenerateJwtToken(User user)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"]);
-            var tokenDescriptor = new SecurityTokenDescriptor
+            var client = await _context.Clients.FirstOrDefaultAsync(c => c.ClientId == clientId);
+            if (client == null || !VerifyClienSecret(clientSecret, client.ClientSecret))
             {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                    new Claim(ClaimTypes.Name, user.Username),
-                    new Claim(ClaimTypes.Email, user.Email),
-                    new Claim(ClaimTypes.Role, user.Role)
-                }),
-                Expires = DateTime.UtcNow.AddHours(1),
-                SigningCredentials = new SigningCredentials(
-                    new SymmetricSecurityKey(key),
-                    SecurityAlgorithms.HmacSha256Signature)
+                return (false, "Invalid client credentials");
+            }
+
+            var claims = new List<Claim>
+            {
+                new Claim("client_id", clientId),
+                new Claim("scope", string.Join(" ", client.AllowedScopes))
             };
 
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
+            var token = GenerateJwtToken(claims);
+            return (true, token);
         }
 
-        private string GenerateJwtToken(Client client)
+        public async Task<(bool success, string message)> RegisterAsync(string email, string password, string firstName, string lastName)
         {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"]);
-            var tokenDescriptor = new SecurityTokenDescriptor
+            var user = new ApplicationUser
             {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim("client_id", client.ClientId),
-                    new Claim("client_name", client.Name),
-                    new Claim("scope", string.Join(" ", client.AllowedScopes))
-                }),
-                Expires = DateTime.UtcNow.AddHours(1),
-                SigningCredentials = new SigningCredentials(
-                    new SymmetricSecurityKey(key),
-                    SecurityAlgorithms.HmacSha256Signature)
+                UserName = email,
+                Email = email,
+                FirstName = firstName,
+                LastName = lastName
             };
 
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
+            var result = await _userManager.CreateAsync(user, password);
+            if (!result.Succeeded)
+            {
+                return (false, string.Join(", ", result.Errors.Select(e => e.Description)));
+            }
+
+            // Assign User role
+            await _userManager.AddToRoleAsync(user, "User");
+
+            return (true, "User registered successfully");
         }
 
-        private bool VerifyPassword(string password, string passwordHash)
+        // TODO: Add a method to create a client
+        public async Task<(bool success, string message)> CreateClientAsync(string clientId, string clientSecret, string name, string[] allowedScopes)
+        {
+            var client = new Client
+            {
+                ClientId = clientId,
+                // Hash the client secret
+                ClientSecret = BCrypt.Net.BCrypt.HashPassword(clientSecret),
+                AllowedScopes = allowedScopes,
+                Name = name,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            await _context.Clients.AddAsync(client);
+            await _context.SaveChangesAsync();
+
+            return (true, "Client created successfully");
+        }
+
+        private string GenerateJwtToken(ApplicationUser user)
+        {
+            var roles = _userManager.GetRolesAsync(user).Result;
+            var claims = new List<Claim>
+            {
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(ClaimTypes.Email, user.Email!),
+                new Claim(ClaimTypes.Name, user.UserName!),
+                new Claim("scope", "api1 api2")
+            };
+
+            // Add roles as claims
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+
+            return GenerateJwtToken(claims);
+        }
+
+        private string GenerateJwtToken(List<Claim> claims)
+        {
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var expires = DateTime.Now.AddDays(Convert.ToDouble(_configuration["Jwt:ExpireDays"]));
+
+            var token = new JwtSecurityToken(
+                _configuration["Jwt:Issuer"],
+                _configuration["Jwt:Audience"],
+                claims,
+                expires: expires,
+                signingCredentials: credentials
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
+        private bool VerifyClienSecret(string clientSecret, string clientSecretHash)
         {
             // In a real application, you would use a proper password hashing library
             // This is just a simple example
-            return BCrypt.Net.BCrypt.Verify(password, passwordHash);
+
+            return BCrypt.Net.BCrypt.Verify(clientSecret, clientSecretHash);
         }
     }
 }

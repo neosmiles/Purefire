@@ -29,12 +29,13 @@ namespace api1.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            var (success, token) = await _authService.AuthenticateUserAsync(request.Username, request.Password);
-
+            var (success, token) = await _authService.LoginAsync(request.Email, request.Password);
             if (!success)
-                return Unauthorized();
+            {
+                return Unauthorized(new { message = token });
+            }
 
-            return Ok(new TokenResponse { Token = token });
+            return Ok(new { token });
         }
 
         /// <summary>
@@ -44,18 +45,69 @@ namespace api1.Controllers
         /// <returns>A JWT token if authentication is successful</returns>
         /// <response code="200">Returns the JWT token</response>
         /// <response code="401">If the credentials are invalid</response>
-        [HttpPost("client")]
+        [HttpPost("login/client")]
         [ProducesResponseType(typeof(TokenResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public async Task<IActionResult> ClientAuth([FromBody] ClientAuthRequest request)
+        public async Task<IActionResult> LoginClient([FromBody] ClientLoginRequest request)
         {
-            var (success, token) = await _authService.AuthenticateClientAsync(request.ClientId, request.ClientSecret);
+            var (success, token) = await _authService.LoginServiceClientAsync(request.ClientId, request.ClientSecret);
+            if (!success)
+            {
+                return Unauthorized(new { message = token });
+            }
+
+            return Ok(new { token });
+        }
+
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        {
+            var (success, message) = await _authService.RegisterAsync(
+                request.Email,
+                request.Password,
+                request.FirstName,
+                request.LastName);
 
             if (!success)
-                return Unauthorized();
+            {
+                return BadRequest(new { message });
+            }
 
-            return Ok(new TokenResponse { Token = token });
+            return Ok(new { message });
         }
+
+        /// <summary>
+        /// Creates a new client
+        /// </summary>
+        /// <param name="request">The client details</param>
+        /// <returns>A message indicating the result of the operation</returns>
+        /// <response code="200">Returns a success message</response>
+        /// <response code="400">Returns an error message</response>
+        [HttpPost("create-client")]
+        [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> CreateClient([FromBody] CreateClientRequest request)
+        {
+            var (success, message) = await _authService.CreateClientAsync(request.ClientId, request.ClientSecret, request.Name, request.AllowedScopes);
+
+            if (!success)
+            {
+                return BadRequest(message);
+            }
+
+            return Ok(message);
+        }
+    }
+
+    /// <summary>
+    /// Request model for creating a new client
+    /// </summary>
+    public class CreateClientRequest
+    {
+        public string ClientId { get; set; } = string.Empty;
+        public string ClientSecret { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string[] AllowedScopes { get; set; } = Array.Empty<string>();
     }
 
     /// <summary>
@@ -64,30 +116,56 @@ namespace api1.Controllers
     public class LoginRequest
     {
         /// <summary>
-        /// The username of the user
+        /// The email of the user
         /// </summary>
-        public string Username { get; set; }
+        public string Email { get; set; } = string.Empty;
 
         /// <summary>
         /// The password of the user
         /// </summary>
-        public string Password { get; set; }
+        public string Password { get; set; } = string.Empty;
     }
 
     /// <summary>
     /// Request model for client authentication
     /// </summary>
-    public class ClientAuthRequest
+    public class ClientLoginRequest
     {
         /// <summary>
         /// The client ID
         /// </summary>
-        public string ClientId { get; set; }
+        public string ClientId { get; set; } = string.Empty;
 
         /// <summary>
         /// The client secret
         /// </summary>
-        public string ClientSecret { get; set; }
+        public string ClientSecret { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Request model for user registration
+    /// </summary>
+    public class RegisterRequest
+    {
+        /// <summary>
+        /// The email of the user
+        /// </summary>
+        public string Email { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The password of the user
+        /// </summary>
+        public string Password { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The first name of the user
+        /// </summary>
+        public string FirstName { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The last name of the user
+        /// </summary>
+        public string LastName { get; set; } = string.Empty;
     }
 
     /// <summary>

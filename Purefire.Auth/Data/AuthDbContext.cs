@@ -1,30 +1,25 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Purefire.Auth.Models;
 
 namespace Purefire.Auth.Data
 {
-    public class AuthDbContext : DbContext
+    public class AuthDbContext : IdentityDbContext<ApplicationUser>
     {
-        public AuthDbContext(DbContextOptions<AuthDbContext> options) : base(options)
+        public AuthDbContext(DbContextOptions<AuthDbContext> options)
+            : base(options)
         {
         }
 
-        public DbSet<User> Users { get; set; }
         public DbSet<Client> Clients { get; set; }
 
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        protected override void OnModelCreating(ModelBuilder builder)
         {
-            base.OnModelCreating(modelBuilder);
+            base.OnModelCreating(builder);
 
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.Username)
-                .IsUnique();
-
-            modelBuilder.Entity<User>()
-                .HasIndex(u => u.Email)
-                .IsUnique();
-
-            modelBuilder.Entity<Client>()
+            // Configure Client entity
+            builder.Entity<Client>()
                 .HasIndex(c => c.ClientId)
                 .IsUnique();
         }
