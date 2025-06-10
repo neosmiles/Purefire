@@ -70,7 +70,7 @@ namespace Purefire.Auth.Data
                     new Client
                     {
                         ClientId = "service1",
-                        ClientSecret = "service1-secret",
+                        ClientSecret = BCrypt.Net.BCrypt.HashPassword("service1-secret"),
                         Name = "Service 1",
                         AllowedScopes = new[] { "api1", "api2" },
                         CreatedAt = DateTime.UtcNow
@@ -78,11 +78,21 @@ namespace Purefire.Auth.Data
                     new Client
                     {
                         ClientId = "service2",
-                        ClientSecret = "service2-secret",
+                        ClientSecret = BCrypt.Net.BCrypt.HashPassword("service2-secret"),
                         Name = "Service 2",
                         AllowedScopes = new[] { "api2" },
                         CreatedAt = DateTime.UtcNow
+                    },
+                    new Client
+                    {
+                        ClientId = "service3",
+                        ClientSecret = BCrypt.Net.BCrypt.HashPassword("service3-secret"),
+                        Name = "Service 3",
+                        AllowedScopes = new[] { "api1" },
+                        CreatedAt = DateTime.UtcNow
                     }
+
+
                 };
 
                 await context.Clients.AddRangeAsync(clients);

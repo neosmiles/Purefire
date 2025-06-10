@@ -87,7 +87,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -100,19 +100,94 @@ var summaries = new[]
 };
 
 app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi().RequireAuthorization();
+    {
+        var forecast = Enumerable.Range(1, 5).Select(index =>
+                new WeatherForecast
+                (
+                    DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+                    Random.Shared.Next(-20, 55),
+                    summaries[Random.Shared.Next(summaries.Length)]
+                ))
+            .ToArray();
+        return forecast;
+    })
+    .WithName("GetWeatherForecast")
+    .WithOpenApi();
+
+app.MapGet("/weatherforecastAuth", (HttpContext context, ILogger<Program> logger) =>
+    {
+        // Log the request
+        logger.LogInformation("Weather forecast endpoint called at {time}", DateTime.UtcNow);
+
+        // Log authentication status
+        var user = context.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            logger.LogInformation("User is authenticated. Username: {username}", user.Identity.Name);
+            logger.LogInformation("User claims: {claims}", string.Join(", ", user.Claims.Select(c => $"{c.Type}={c.Value}")));
+        }
+        else
+        {
+            logger.LogWarning("User is not authenticated");
+        }
+
+        // Log headers for debugging
+        logger.LogInformation("Request Headers:");
+        foreach (var header in context.Request.Headers)
+        {
+            logger.LogInformation("  {header}: {value}", header.Key, header.Value);
+        }
+
+        var forecast = Enumerable.Range(1, 5).Select(index =>
+                new WeatherForecast
+                (
+                    DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+                    Random.Shared.Next(-20, 55),
+                    summaries[Random.Shared.Next(summaries.Length)]
+                ))
+            .ToArray();
+        return forecast;
+    })
+    .WithName("GetWeatherForecastAuth")
+    .WithOpenApi().RequireAuthorization();
+
+app.MapGet("/weatherforecastfree", (HttpContext context, ILogger<Program> logger) =>
+    {
+        // Log the request
+        logger.LogInformation("Weather forecast endpoint called at {time}", DateTime.UtcNow);
+
+        // Log authentication status
+        var user = context.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            logger.LogInformation("User is authenticated. Username: {username}", user.Identity.Name);
+            logger.LogInformation("User claims: {claims}",
+                string.Join(", ", user.Claims.Select(c => $"{c.Type}={c.Value}")));
+        }
+        else
+        {
+            logger.LogWarning("User is not authenticated");
+        }
+
+        // Log headers for debugging
+        logger.LogInformation("Request Headers:");
+        foreach (var header in context.Request.Headers)
+        {
+            logger.LogInformation("  {header}: {value}", header.Key, header.Value);
+        }
+
+        var forecast = Enumerable.Range(1, 5).Select(index =>
+                new WeatherForecast
+                (
+                    DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+                    Random.Shared.Next(-20, 55),
+                    summaries[Random.Shared.Next(summaries.Length)]
+                ))
+            .ToArray();
+        return forecast;
+    })
+    .WithName("GetWeatherForecastfree")
+    .WithOpenApi();
 
 app.Run();
 
