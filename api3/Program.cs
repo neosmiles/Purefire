@@ -61,7 +61,7 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "API 1 - Authentication Service",
+        Title = "API 3 - Application Service ",
         Version = "v1",
         Description = "API for handling user and client authentication",
         Contact = new OpenApiContact
@@ -111,7 +111,10 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
+    }); ;
 }
 
 app.UseHttpsRedirection();

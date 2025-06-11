@@ -1,6 +1,6 @@
 # Purefire Authentication System
 
-A secure authentication system built with ASP.NET Core, featuring JWT-based authentication for both user and machine-to-machine (M2M) scenarios. The system is designed as a microservices architecture with two APIs and a shared authentication library.
+A secure authentication system built with ASP.NET Core, featuring JWT-based authentication for both user and machine-to-machine (M2M) scenarios. The system is designed as a microservices architecture with three APIs and a shared authentication library.
 
 ## Project Structure
 
@@ -13,8 +13,10 @@ Purefire/
 │   └── Services/                 # Authentication services
 ├── api1/                         # Authentication API
 │   └── Controllers/             # API endpoints
-└── api2/                         # Protected API
-    └── Controllers/             # Protected endpoints
+├── api2/                         # Protected API
+│   └── Controllers/             # Protected endpoints
+└── api3/                         # Application Service API
+    └── Controllers/             # Application endpoints
 ```
 
 ## Features
@@ -38,6 +40,7 @@ Purefire/
   - Scope-based authorization
   - Secure password storage
   - In-memory database for development
+  - Swagger UI with JWT authentication support
 
 ## Prerequisites
 
@@ -70,6 +73,10 @@ Purefire/
    # Terminal 2 - API 2 (Protected API)
    cd api2
    dotnet run
+
+   # Terminal 3 - API 3 (Application Service)
+   cd api3
+   dotnet run
    ```
 
 ## API Endpoints
@@ -96,6 +103,14 @@ Purefire/
   - Returns: JWT token
 
 ### Protected API (api2)
+
+All endpoints require a valid JWT token in the Authorization header:
+
+```
+Authorization: Bearer <token>
+```
+
+### Application Service API (api3)
 
 All endpoints require a valid JWT token in the Authorization header:
 
@@ -149,6 +164,21 @@ The system implements several authorization policies:
    - Requires the api2 scope in the token
    - Used for API 2 specific endpoints
 
+## JWT Configuration
+
+The system uses the following JWT configuration across all services:
+
+```json
+{
+  "Jwt": {
+    "Key": "your-super-secret-key-with-at-least-32-characters",
+    "Issuer": "google.com",
+    "Audience": "purefire-services",
+    "ExpireDays": 1
+  }
+}
+```
+
 ## Development
 
 ### Adding New Endpoints
@@ -177,6 +207,7 @@ The system implements several authorization policies:
   - Use HTTPS in production
   - Consider implementing rate limiting
   - Add additional security headers
+  - Store JWT keys securely using Azure Key Vault or similar services
 
 ## Contributing
 
