@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Purefire.Auth.Services;
 
@@ -97,6 +98,51 @@ namespace api1.Controllers
 
             return Ok(message);
         }
+
+        [HttpGet("Keycloaktest")]
+        [Authorize]
+        public IActionResult Getkeycloak()
+        {
+            // Add debugging information
+            var user = HttpContext.User;
+            var claims = user.Claims.Select(c => new { c.Type, c.Value }).ToList();
+            var authScheme = HttpContext.User.Identity?.AuthenticationType;
+            var isAuthenticated = HttpContext.User.Identity?.IsAuthenticated ?? false;
+
+            return Ok(new
+            {
+                message = "Authenticated successfully, hurry!!!",
+                isAuthenticated = isAuthenticated,
+                authenticationScheme = authScheme,
+                userName = user.Identity?.Name,
+                claims = claims
+            });
+        }
+
+        [HttpGet("test-no-auth")]
+        public IActionResult TestNoAuth()
+        {
+            return Ok(new { message = "This endpoint works without authentication", timestamp = DateTime.UtcNow });
+        }
+
+        [HttpGet("test-auth-info")]
+        public IActionResult TestAuthInfo()
+        {
+            var user = HttpContext.User;
+            var authHeader = HttpContext.Request.Headers.Authorization.FirstOrDefault();
+
+            return Ok(new
+            {
+                message = "Auth info endpoint",
+                isAuthenticated = user.Identity?.IsAuthenticated ?? false,
+                authScheme = user.Identity?.AuthenticationType,
+                userName = user.Identity?.Name,
+                hasAuthHeader = !string.IsNullOrEmpty(authHeader),
+                authHeaderPrefix = authHeader?.Split(' ').FirstOrDefault(),
+                claimCount = user.Claims.Count(),
+                timestamp = DateTime.UtcNow
+            });
+        }
     }
 
     /// <summary>
@@ -176,6 +222,6 @@ namespace api1.Controllers
         /// <summary>
         /// The JWT token
         /// </summary>
-        public string Token { get; set; }
+        public string Token { get; set; } = string.Empty;
     }
 }

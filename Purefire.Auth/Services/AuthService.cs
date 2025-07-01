@@ -1,14 +1,12 @@
-using System;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using Purefire.Auth.Data;
 using Purefire.Auth.Models;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace Purefire.Auth.Services
 {
@@ -22,14 +20,14 @@ namespace Purefire.Auth.Services
 
     public class AuthService : IAuthService
     {
-        private readonly UserManager<ApplicationUser> _userManager;
-        private readonly SignInManager<ApplicationUser> _signInManager;
+        private readonly UserManager<AppUser> _userManager;
+        private readonly SignInManager<AppUser> _signInManager;
         private readonly AuthDbContext _context;
         private readonly IConfiguration _configuration;
 
         public AuthService(
-            UserManager<ApplicationUser> userManager,
-            SignInManager<ApplicationUser> signInManager,
+            UserManager<AppUser> userManager,
+            SignInManager<AppUser> signInManager,
             AuthDbContext context,
             IConfiguration configuration)
         {
@@ -81,7 +79,7 @@ namespace Purefire.Auth.Services
 
         public async Task<(bool success, string message)> RegisterAsync(string email, string password, string firstName, string lastName)
         {
-            var user = new ApplicationUser
+            var user = new AppUser
             {
                 UserName = email,
                 Email = email,
@@ -120,7 +118,7 @@ namespace Purefire.Auth.Services
             return (true, "Client created successfully");
         }
 
-        private string GenerateJwtToken(ApplicationUser user)
+        private string GenerateJwtToken(AppUser user)
         {
             var roles = _userManager.GetRolesAsync(user).Result;
             var claims = new List<Claim>

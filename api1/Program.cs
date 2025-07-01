@@ -1,88 +1,91 @@
 using Microsoft.AspNetCore.Identity;
-using Microsoft.OpenApi.Models;
 using Purefire.Auth.Data;
 using Purefire.Auth.Extensions;
 using Purefire.Auth.Models;
-using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
 
+
 // Add authentication services
 builder.Services.AddAuthServices(builder.Configuration);
 
 // Configure Swagger/OpenAPI
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new OpenApiInfo
-    {
-        Title = "API 1 - Authentication Service",
-        Version = "v1",
-        Description = "API for handling user and client authentication",
-        Contact = new OpenApiContact
-        {
-            Name = "API Support",
-            Email = "support@example.com"
-        }
-    });
+//builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddApplicationSwagger();
+//builder.Services.AddSwaggerGen(c =>
+//{
+//    c.SwaggerDoc("v1", new OpenApiInfo
+//    {
+//        Title = "API 1 - Authentication Service",
+//        Version = "v1",
+//        Description = "API for handling user and client authentication",
+//        Contact = new OpenApiContact
+//        {
+//            Name = "API Support",
+//            Email = "support@example.com"
+//        }
+//    });
 
-    // Add JWT Authentication
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
+//    // Add JWT Authentication
+//    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+//    {
+//        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+//        Name = "Authorization",
+//        In = ParameterLocation.Header,
+//        Type = SecuritySchemeType.ApiKey,
+//        Scheme = "Bearer"
+//    });
 
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
+//    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+//    {
+//        {
+//            new OpenApiSecurityScheme
+//            {
+//                Reference = new OpenApiReference
+//                {
+//                    Type = ReferenceType.SecurityScheme,
+//                    Id = "Bearer"
+//                }
+//            },
+//            Array.Empty<string>()
+//        }
+//    });
 
-    // Include XML Comments
-    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-    if (File.Exists(xmlPath))
-    {
-        c.IncludeXmlComments(xmlPath);
-    }
-});
+//    // Include XML Comments
+//    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+//    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+//    if (File.Exists(xmlPath))
+//    {
+//        c.IncludeXmlComments(xmlPath);
+//    }
+//});
 
 var app = builder.Build();
 
 // Seed the database
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    var context = services.GetRequiredService<AuthDbContext>();
-    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
-    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-    await DbSeeder.SeedDataAsync(context, userManager, roleManager);
-}
+//using (var scope = app.Services.CreateScope())
+//{
+//    var services = scope.ServiceProvider;
+//    var context = services.GetRequiredService<AuthDbContext>();
+//    var userManager = services.GetRequiredService<UserManager<AppUser>>();
+//    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+//    await DbSeeder.SeedDataAsync(context, userManager, roleManager);
+//}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
-    });
+    //app.UseSwagger();
+    // app.UseSwaggerUI(c =>
+    // {
+    //     c.DocExpansion(Swashbuckle.AspNetCore.SwaggerUI.DocExpansion.None);
+
+    // });
+    app.UseOpenApi();
+    app.UseSwaggerUi(settings => settings.UseApplicationSwaggerSettings(app.Configuration));
 }
 
 //app.UseHttpsRedirection();
@@ -90,7 +93,7 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers(); // Remove global authorization requirement
 
 var summaries = new[]
 {

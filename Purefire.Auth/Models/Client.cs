@@ -1,5 +1,3 @@
-using System;
-
 namespace Purefire.Auth.Models
 {
     public class Client

@@ -7,7 +7,7 @@ namespace Purefire.Auth.Data
     {
         public static async Task SeedDataAsync(
             AuthDbContext context,
-            UserManager<ApplicationUser> userManager,
+            UserManager<AppUser> userManager,
             RoleManager<IdentityRole> roleManager)
         {
             // Seed roles if they don't exist
@@ -25,7 +25,7 @@ namespace Purefire.Auth.Data
             var adminUser = await userManager.FindByEmailAsync(adminEmail);
             if (adminUser == null)
             {
-                adminUser = new ApplicationUser
+                adminUser = new AppUser
                 {
                     UserName = adminEmail,
                     Email = adminEmail,
@@ -46,7 +46,7 @@ namespace Purefire.Auth.Data
             var regularUser = await userManager.FindByEmailAsync(userEmail);
             if (regularUser == null)
             {
-                regularUser = new ApplicationUser
+                regularUser = new AppUser
                 {
                     UserName = userEmail,
                     Email = userEmail,

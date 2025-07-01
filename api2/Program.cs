@@ -92,7 +92,7 @@ using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     var context = services.GetRequiredService<AuthDbContext>();
-    var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+    var userManager = services.GetRequiredService<UserManager<AppUser>>();
     var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
     await DbSeeder.SeedDataAsync(context, userManager, roleManager);
 }
