@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Purefire.Auth.Data;
 using Purefire.Auth.Models;
@@ -10,44 +11,17 @@ namespace Purefire.Auth.Services;
 public class UserSyncService(
     AuthDbContext context,
     UserManager<AppUser> userManager,
+    IMemoryCache cache,
     ILogger<UserSyncService> logger) : IUserSyncService
 {
+    private static readonly TimeSpan CacheExpiration = TimeSpan.FromHours(4);
+
     public async Task<AppUser?> SyncUserFromClaimsAsync(ClaimsPrincipal principal)
     {
         try
         {
             // Extract user information from JWT claims
-            // var keycloakUserId = principal.FindFirst("sub")?.Value;
-            // var email = principal.FindFirst("email")?.Value;
-            // var username = principal.FindFirst("preferred_username")?.Value;
-            // var firstName = principal.FindFirst("given_name")?.Value;
-            // var lastName = principal.FindFirst("family_name")?.Value;
-            // var emailVerified = principal.FindFirst("email_verified")?.Value;
-            // var organizationId = ExtractOrganizationId(principal);
-
-            // if (string.IsNullOrEmpty(keycloakUserId))
-            // {
-            //     logger.LogWarning("No subject claim found in JWT token");
-            //     return null;
-            // }
-
-            // Extract user information from JWT claims
-            var keycloakUserId = principal.FindFirst("sub")?.Value
-                ?? principal.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
-
-            var email = principal.FindFirst("email")?.Value
-                ?? principal.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
-
-            var username = principal.FindFirst("preferred_username")?.Value;
-
-            var firstName = principal.FindFirst("given_name")?.Value
-                ?? principal.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")?.Value;
-
-            var lastName = principal.FindFirst("family_name")?.Value
-                ?? principal.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")?.Value;
-
-            var emailVerified = principal.FindFirst("email_verified")?.Value;
-            var organizationId = ExtractOrganizationId(principal);
+            var keycloakUserId = principal.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
 
             if (string.IsNullOrEmpty(keycloakUserId))
             {
@@ -55,91 +29,77 @@ public class UserSyncService(
                 return null;
             }
 
-            // Try to find existing user by KeycloakUserId
+            // Check cache first
+            var cacheKey = GetUserCacheKey(keycloakUserId);
+            if (cache.TryGetValue(cacheKey, out AppUser? cachedUser))
+            {
+                return cachedUser;
+            }
+
+            // Extract all claims once
+            var userClaims = ExtractUserClaims(principal);
+            var organizationId = ExtractOrganizationId(principal);
+
+            // Try to find existing user by KeycloakUserId with minimal data
             var existingUser = await context.Users
+                .AsNoTracking() // Read-only query for better performance
+                .Select(u => new
+                {
+                    u.Id,
+                    u.KeycloakUserId,
+                    u.Email,
+                    u.UserName,
+                    u.FirstName,
+                    u.LastName,
+                    u.EmailConfirmed,
+                    u.OrganizationId,
+                    u.Enabled,
+                    u.CreatedAt
+                })
                 .FirstOrDefaultAsync(u => u.KeycloakUserId == keycloakUserId);
+
+            AppUser result;
 
             if (existingUser != null)
             {
-                // Check if any properties have changed
-                bool userUpdated = false;
+                // Check if update is needed by comparing values
+                var needsUpdate = DoesUserNeedUpdate(existingUser, userClaims, organizationId);
 
-                if (existingUser.OrganizationId != organizationId)
+                if (needsUpdate)
                 {
-                    existingUser.OrganizationId = organizationId;
-                    userUpdated = true;
+                    // Only fetch and update if changes detected
+                    result = await UpdateExistingUserAsync(existingUser.Id, userClaims, organizationId);
                 }
-
-                if (existingUser.Email != email)
+                else
                 {
-                    existingUser.Email = email;
-                    userUpdated = true;
-                }
-
-                if (existingUser.UserName != username)
-                {
-                    existingUser.UserName = username;
-                    userUpdated = true;
-                }
-
-                if (existingUser.FirstName != firstName)
-                {
-                    existingUser.FirstName = firstName;
-                    userUpdated = true;
-                }
-
-                if (existingUser.LastName != lastName)
-                {
-                    existingUser.LastName = lastName;
-                    userUpdated = true;
-                }
-
-                if (emailVerified != null && existingUser.EmailConfirmed != bool.Parse(emailVerified))
-                {
-                    existingUser.EmailConfirmed = bool.Parse(emailVerified);
-                    userUpdated = true;
+                    // Convert projection back to AppUser for caching
+                    result = new AppUser
+                    {
+                        Id = existingUser.Id,
+                        KeycloakUserId = existingUser.KeycloakUserId,
+                        Email = existingUser.Email,
+                        UserName = existingUser.UserName,
+                        FirstName = existingUser.FirstName,
+                        LastName = existingUser.LastName,
+                        EmailConfirmed = existingUser.EmailConfirmed,
+                        OrganizationId = existingUser.OrganizationId,
+                        Enabled = existingUser.Enabled,
+                        CreatedAt = existingUser.CreatedAt
+                    };
                 }
 
 
-                // Always update last login time
-                existingUser.LastLoginAt = DateTime.UtcNow;
-
-                await userManager.UpdateAsync(existingUser);
-
-                if (userUpdated)
-                {
-                    logger.LogInformation("Updated properties for user {UserId}", existingUser.Id);
-                }
-
-                return existingUser;
+            }
+            else
+            {
+                // Create new user
+                result = await CreateNewUserAsync(keycloakUserId, userClaims, organizationId);
+                if (result == null) return null;
             }
 
-            // Create new user if not found
-            var newUser = new AppUser
-            {
-                KeycloakUserId = keycloakUserId,
-                UserName = username ?? email ?? $"user_{keycloakUserId}",
-                Email = email,
-                EmailConfirmed = bool.Parse(emailVerified!),
-                FirstName = firstName,
-                LastName = lastName,
-                OrganizationId = organizationId,
-                Enabled = true,
-                CreatedAt = DateTime.UtcNow,
-                LastLoginAt = DateTime.UtcNow
-            };
-
-            var result = await userManager.CreateAsync(newUser);
-            if (result.Succeeded)
-            {
-                logger.LogInformation("Created new user {UserId} from Keycloak user {KeycloakUserId}",
-                    newUser.Id, keycloakUserId);
-                return newUser;
-            }
-
-            logger.LogError("Failed to create user from Keycloak claims: {Errors}",
-                string.Join(", ", result.Errors.Select(e => e.Description)));
-            return null;
+            // Cache the result with longer duration
+            cache.Set(cacheKey, result, CacheExpiration);
+            return result;
         }
         catch (Exception ex)
         {
@@ -147,6 +107,86 @@ public class UserSyncService(
             return null;
         }
     }
+
+    private UserClaimsData ExtractUserClaims(ClaimsPrincipal principal)
+    {
+        return new UserClaimsData
+        {
+            Email = principal.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value,
+            Username = principal.FindFirst("preferred_username")?.Value,
+            FirstName = principal.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname")?.Value,
+            LastName = principal.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname")?.Value,
+            EmailVerified = principal.FindFirst("email_verified")?.Value
+        };
+    }
+
+    private bool DoesUserNeedUpdate(dynamic existingUser, UserClaimsData claims, string? organizationId)
+    {
+        return existingUser.Email != claims.Email ||
+               existingUser.UserName != claims.Username ||
+               existingUser.FirstName != claims.FirstName ||
+               existingUser.LastName != claims.LastName ||
+               (claims.EmailVerified != null && existingUser.EmailConfirmed != bool.Parse(claims.EmailVerified));
+        // Uncomment if you want to sync organization changes:
+        // || existingUser.OrganizationId != organizationId;
+    }
+
+    private async Task<AppUser> UpdateExistingUserAsync(string userId, UserClaimsData claims, string? organizationId)
+    {
+        // Fetch only the user that needs updating
+        var userToUpdate = await context.Users.FindAsync(userId);
+        if (userToUpdate == null) return null;
+
+        // Apply updates
+        userToUpdate.Email = claims.Email;
+        userToUpdate.UserName = claims.Username;
+        userToUpdate.FirstName = claims.FirstName;
+        userToUpdate.LastName = claims.LastName;
+        userToUpdate.LastLoginAt = DateTime.UtcNow; // Update last login time
+
+        if (claims.EmailVerified != null)
+        {
+            userToUpdate.EmailConfirmed = bool.Parse(claims.EmailVerified);
+        }
+
+        // Uncomment if syncing organization:
+        // userToUpdate.OrganizationId = organizationId;
+
+        await userManager.UpdateAsync(userToUpdate);
+        logger.LogInformation("Updated properties for user {UserId}", userId);
+
+        return userToUpdate;
+    }
+
+    private async Task<AppUser?> CreateNewUserAsync(string keycloakUserId, UserClaimsData claims, string? organizationId)
+    {
+        var newUser = new AppUser
+        {
+            KeycloakUserId = keycloakUserId,
+            UserName = claims.Username ?? claims.Email ?? $"user_{keycloakUserId}",
+            Email = claims.Email,
+            EmailConfirmed = bool.Parse(claims.EmailVerified ?? "false"),
+            FirstName = claims.FirstName,
+            LastName = claims.LastName,
+            OrganizationId = organizationId,
+            Enabled = true,
+            CreatedAt = DateTime.UtcNow,
+            LastLoginAt = DateTime.UtcNow
+        };
+
+        var result = await userManager.CreateAsync(newUser);
+        if (result.Succeeded)
+        {
+            logger.LogInformation("Created new user {UserId} from Keycloak user {KeycloakUserId}",
+                newUser.Id, keycloakUserId);
+            return newUser;
+        }
+
+        logger.LogError("Failed to create user from Keycloak claims: {Errors}",
+            string.Join(", ", result.Errors.Select(e => e.Description)));
+        return null;
+    }
+
 
     public string? ExtractOrganizationId(ClaimsPrincipal principal)
     {
@@ -161,5 +201,30 @@ public class UserSyncService(
         // Fallback to other possible claim names
         return principal.FindFirst("org")?.Value
                ?? principal.FindFirst("organization_id")?.Value;
+    }
+
+    public void InvalidateUserCache(string keycloakUserId)
+    {
+        var cacheKey = GetUserCacheKey(keycloakUserId);
+        cache.Remove(cacheKey);
+        logger.LogDebug("Invalidated cache for user {KeycloakUserId}", keycloakUserId);
+    }
+
+    //public void InvalidateUserCacheByLocalId(string localUserId)
+    //{
+    //    // For cases where you only have the local user ID
+    //    var cacheKey = $"user_sync_local_{localUserId}";
+    //    cache.Remove(cacheKey);
+    //    logger.LogDebug("Invalidated cache for local user {LocalUserId}", localUserId);
+    //}
+
+    private static string GetUserCacheKey(string keycloakUserId) => $"user_sync_{keycloakUserId}";
+    private record UserClaimsData
+    {
+        public string? Email { get; init; }
+        public string? Username { get; init; }
+        public string? FirstName { get; init; }
+        public string? LastName { get; init; }
+        public string? EmailVerified { get; init; }
     }
 }

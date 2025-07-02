@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Purefire.Auth.Data;
 using Purefire.Auth.Models;
 using Purefire.Auth.Services;
@@ -87,21 +88,38 @@ public static class ServiceCollectionExtensions
             {
                 OnTokenValidated = async context =>
                 {
-                    var userSyncService = context.HttpContext.RequestServices.GetRequiredService<IUserSyncService>();
-                    var syncedUser = await userSyncService.SyncUserFromClaimsAsync(context.Principal!);
-
-                    if (syncedUser != null)
+                    try
                     {
-                        // Add tenant context to claims
-                        var claims = new List<Claim>();
-                        if (!string.IsNullOrEmpty(syncedUser.OrganizationId))
-                        {
-                            claims.Add(new Claim("tenant_id", syncedUser.OrganizationId));
-                        }
-                        claims.Add(new Claim("local_user_id", syncedUser.Id));
+                        var userSyncService = context.HttpContext.RequestServices.GetRequiredService<IUserSyncService>();
+                        var syncedUser = await userSyncService.SyncUserFromClaimsAsync(context.Principal!);
 
-                        var appIdentity = new ClaimsIdentity(claims);
-                        context.Principal!.AddIdentity(appIdentity);
+                        if (syncedUser != null)
+                        {
+                            // Add tenant context to claims
+                            var claims = new List<Claim>(2);
+                            if (!string.IsNullOrEmpty(syncedUser.OrganizationId))
+                            {
+                                claims.Add(new Claim("tenant_id", syncedUser.OrganizationId));
+                            }
+                            claims.Add(new Claim("local_user_id", syncedUser.Id));
+
+                            var appIdentity = new ClaimsIdentity(claims);
+                            context.Principal!.AddIdentity(appIdentity);
+                        }
+
+                    }
+                    catch (Exception ex)
+                    {
+                        // Log but don't fail authentication
+                        var loggerFactory = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>();
+                        var logger = loggerFactory.CreateLogger("JwtUserSync");
+                        logger.LogError(ex, "Error during user sync in JWT validation");
+
+                        // Continue with authentication even if sync fails
+                        // This prevents auth failures due to sync issues
+
+
+
                     }
                 }
             };
@@ -157,6 +175,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserSyncService, UserSyncService>();
         services.AddScoped<IKeycloakAdminService, KeycloakAdminService>();
         services.AddScoped<ITenantService, TenantService>();
+        services.AddMemoryCache();
 
         return services;
     }

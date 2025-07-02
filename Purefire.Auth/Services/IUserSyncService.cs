@@ -18,4 +18,9 @@ public interface IUserSyncService
     /// <param name="principal">ClaimsPrincipal from JWT token</param>
     /// <returns>Organization ID or null</returns>
     string? ExtractOrganizationId(ClaimsPrincipal principal);
+
+
+    
+    void InvalidateUserCache(string keycloakUserId);
+    //void InvalidateUserCacheByLocalId(string localUserId);
 }
