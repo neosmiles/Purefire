@@ -1,3 +1,4 @@
+using Finbuckle.MultiTenant;
 using Keycloak.AuthServices.Authentication;
 using Keycloak.AuthServices.Common;
 using Keycloak.AuthServices.Sdk;
@@ -22,7 +23,22 @@ public static class ServiceCollectionExtensions
     {
         // Add DbContext
         services.AddDbContext<AuthDbContext>(options =>
-            options.UseInMemoryDatabase("AuthDb"));
+            options.UseSqlServer(configuration.GetConnectionString("SqlServerConnection")));
+
+        #region finbuckle-multitenant
+        services.AddDbContext<TenantContext>(options =>
+            options.UseInMemoryDatabase("TenantConnection"));
+
+
+        //  Add Finbuckle.MultiTenant, pointing at DataContext as the EF store:
+        services.AddMultiTenant<TenantInfo>()
+            .WithEFCoreStore<TenantContext, TenantInfo>()
+            // .WithHeaderStrategy("X-Tenant-ID")
+            .WithClaimStrategy("organization");
+            //.WithHostStrategy()          // subdomain
+            // .WithRouteStrategy("{tenantId}")
+            //.WithStaticStrategy("lg");
+        #endregion
 
         // Add Identity
         /*  services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -81,49 +97,8 @@ public static class ServiceCollectionExtensions
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
         })
-        .AddKeycloakWebApi(configuration, o =>
-        {
-            // Configure JWT events for user synchronization
-            o.Events = new JwtBearerEvents
-            {
-                OnTokenValidated = async context =>
-                {
-                    try
-                    {
-                        var userSyncService = context.HttpContext.RequestServices.GetRequiredService<IUserSyncService>();
-                        var syncedUser = await userSyncService.SyncUserFromClaimsAsync(context.Principal!);
-
-                        if (syncedUser != null)
-                        {
-                            // Add tenant context to claims
-                            var claims = new List<Claim>(2);
-                            if (!string.IsNullOrEmpty(syncedUser.OrganizationId))
-                            {
-                                claims.Add(new Claim("tenant_id", syncedUser.OrganizationId));
-                            }
-                            claims.Add(new Claim("local_user_id", syncedUser.Id));
-
-                            var appIdentity = new ClaimsIdentity(claims);
-                            context.Principal!.AddIdentity(appIdentity);
-                        }
-
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log but don't fail authentication
-                        var loggerFactory = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>();
-                        var logger = loggerFactory.CreateLogger("JwtUserSync");
-                        logger.LogError(ex, "Error during user sync in JWT validation");
-
-                        // Continue with authentication even if sync fails
-                        // This prevents auth failures due to sync issues
-
-
-
-                    }
-                }
-            };
-        });
+        .AddKeycloakWebApi(configuration);
+        
 
         // Register our custom permission-based authorization
         //services.AddPermissionsAuthorization();
@@ -174,7 +149,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAppUserService, AppUserService>();
         services.AddScoped<IUserSyncService, UserSyncService>();
         services.AddScoped<IKeycloakAdminService, KeycloakAdminService>();
-        services.AddScoped<ITenantService, TenantService>();
         services.AddMemoryCache();
 
         return services;

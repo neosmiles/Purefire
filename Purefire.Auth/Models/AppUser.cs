@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Identity;
 
 namespace Purefire.Auth.Models;
 
-public class AppUser : IdentityUser, ITenantEntity
+public class AppUser : IdentityUser
 {
     public string? FirstName { get; set; }
     public string? LastName { get; set; }

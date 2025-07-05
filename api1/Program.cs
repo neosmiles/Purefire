@@ -1,4 +1,7 @@
+using Finbuckle.MultiTenant;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Purefire.Auth.Data;
 using Purefire.Auth.Extensions;
 using Purefire.Auth.Models;
@@ -15,65 +18,21 @@ builder.Services.AddAuthServices(builder.Configuration);
 // Configure Swagger/OpenAPI
 //builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddApplicationSwagger();
-//builder.Services.AddSwaggerGen(c =>
-//{
-//    c.SwaggerDoc("v1", new OpenApiInfo
-//    {
-//        Title = "API 1 - Authentication Service",
-//        Version = "v1",
-//        Description = "API for handling user and client authentication",
-//        Contact = new OpenApiContact
-//        {
-//            Name = "API Support",
-//            Email = "support@example.com"
-//        }
-//    });
 
-//    // Add JWT Authentication
-//    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-//    {
-//        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
-//        Name = "Authorization",
-//        In = ParameterLocation.Header,
-//        Type = SecuritySchemeType.ApiKey,
-//        Scheme = "Bearer"
-//    });
-
-//    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-//    {
-//        {
-//            new OpenApiSecurityScheme
-//            {
-//                Reference = new OpenApiReference
-//                {
-//                    Type = ReferenceType.SecurityScheme,
-//                    Id = "Bearer"
-//                }
-//            },
-//            Array.Empty<string>()
-//        }
-//    });
-
-//    // Include XML Comments
-//    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-//    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-//    if (File.Exists(xmlPath))
-//    {
-//        c.IncludeXmlComments(xmlPath);
-//    }
-//});
 
 var app = builder.Build();
 
 // Seed the database
-//using (var scope = app.Services.CreateScope())
-//{
-//    var services = scope.ServiceProvider;
-//    var context = services.GetRequiredService<AuthDbContext>();
-//    var userManager = services.GetRequiredService<UserManager<AppUser>>();
-//    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-//    await DbSeeder.SeedDataAsync(context, userManager, roleManager);
-//}
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var tenantContext = services.GetRequiredService<TenantContext>();
+    await TenantDbSeeder.SeedDataAsync(tenantContext);
+    //var context = services.GetRequiredService<AuthDbContext>();
+    //var userManager = services.GetRequiredService<UserManager<AppUser>>();
+    //var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+    //await DbSeeder.SeedDataAsync(context, userManager, roleManager);
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -85,7 +44,7 @@ if (app.Environment.IsDevelopment())
 }
 
 //app.UseHttpsRedirection();
-
+app.UseMultiTenant();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -185,6 +144,10 @@ app.MapGet("/weatherforecastfree", (HttpContext context, ILogger<Program> logger
     })
     .WithName("GetWeatherForecastfree")
     .WithOpenApi();
+
+app.MapGet("/newendpoint", async (TenantContext tenantContext) => await tenantContext.TenantInfo.ToListAsync())
+.WithName("GetNewEndpoint")
+.WithOpenApi();
 
 app.Run();
 

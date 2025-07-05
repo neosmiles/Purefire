@@ -42,6 +42,7 @@ public class UserSyncService(
 
             // Try to find existing user by KeycloakUserId with minimal data
             var existingUser = await context.Users
+                .IgnoreQueryFilters()
                 .AsNoTracking() // Read-only query for better performance
                 .Select(u => new
                 {
@@ -171,7 +172,8 @@ public class UserSyncService(
             OrganizationId = organizationId,
             Enabled = true,
             CreatedAt = DateTime.UtcNow,
-            LastLoginAt = DateTime.UtcNow
+            LastLoginAt = DateTime.UtcNow,
+           
         };
 
         var result = await userManager.CreateAsync(newUser);
