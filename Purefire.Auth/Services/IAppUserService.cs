@@ -15,4 +15,11 @@ public interface IAppUserService
     Task<RoleDto?> GetRoleByNameAsync(string roleName);
     Task CreateRoleAsync(RoleDto role);
     Task AssignRoleToUserAsync(string userId, RoleDto role);
+
+    // New ASP.NET Core Identity Role Management Methods
+    Task<Microsoft.AspNetCore.Identity.IdentityResult> CreateAspNetRoleAsync(string roleName);
+    Task<IEnumerable<string>> GetUserAspNetRolesAsync(string userId);
+    Task<IEnumerable<Microsoft.AspNetCore.Identity.IdentityRole>> GetAllAspNetRolesAsync();
+    Task<Microsoft.AspNetCore.Identity.IdentityResult> AssignAspNetRoleToUserAsync(string userId, string roleName);
+    Task<Microsoft.AspNetCore.Identity.IdentityResult> RemoveAspNetRoleFromUserAsync(string userId, string roleName);
 }

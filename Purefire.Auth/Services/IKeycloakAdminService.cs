@@ -20,5 +20,6 @@ public interface IKeycloakAdminService
     Task<IEnumerable<OrganizationRepresentation>> GetOrganizationsAsync();
     Task<OrganizationRepresentation> GetOrganizationByIdAsync(string organizationId);
     Task<bool> CreateOrganizationAsync(OrganizationRepresentation organizationRepresentation);
+    Task UpdateUserAttributesAsync(string userId, Dictionary<string, List<string>> attributes);
 
 }

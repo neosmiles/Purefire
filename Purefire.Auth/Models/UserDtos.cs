@@ -25,3 +25,8 @@ public class RoleDto
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
 }
+
+public class AspNetRoleRequestDto
+{
+    public string RoleName { get; set; } = string.Empty;
+}

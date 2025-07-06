@@ -149,4 +149,13 @@ public class KeycloakAdminService : IKeycloakAdminService
             return false;
         }
     }
+
+    public async Task UpdateUserAttributesAsync(string userId, Dictionary<string, List<string>> attributes)
+    {
+        var userRepresentation = new UserRepresentation
+        {
+            Attributes = attributes
+        };
+        await _adminApiClient.Admin.Realms[DefaultRealm].Users[userId].PutAsync(userRepresentation);
+    }
 }
