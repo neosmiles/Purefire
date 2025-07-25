@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Purefire.Auth.Data;
 using Purefire.Auth.Models;
 using Microsoft.Extensions.Logging; // Added for logging potential errors
+using Keycloak.AuthServices.Sdk.Kiota.Admin.Models;
 
 namespace Purefire.Auth.Services;
 
@@ -24,8 +25,8 @@ public class AppUserService(
 
     public async Task<IEnumerable<AppUser>> GetAllUsersAsync()
     {
-        var keycloakUsers = await keycloakAdminService.GetUsersAsync();
-        var localUsers = await context.Users.ToListAsync();
+       // var keycloakUsers = await keycloakAdminService.GetUsersAsync();
+        var localUsers = await context.Users.IgnoreQueryFilters().ToListAsync();
 
         // Ensure all Keycloak users exist in local database
         // foreach (var keycloakUser in keycloakUsers)
@@ -56,6 +57,18 @@ public class AppUserService(
         // }
 
         return localUsers;
+    }
+
+    public async Task<UserRepresentation> GetUserByKeycloakUserIdAsync(string keycloakUserId)
+    {
+        // Fetch user from Keycloak by Keycloak ID
+        var userRepresentation = await keycloakAdminService.GetUserByIdAsync(keycloakUserId);
+        if (userRepresentation == null)
+        {
+            throw new KeyNotFoundException($"User with Keycloak ID '{keycloakUserId}' not found.");
+        }
+
+        return userRepresentation;
     }
     public async Task<AppUser?> GetUserByIdAsync(string id)
     {
@@ -307,19 +320,18 @@ public class AppUserService(
         }
 
         var roles = await _userManager.GetRolesAsync(user);
-        var attributes = new Dictionary<string, List<string>>
+        var attributes = new Dictionary<string, object>
         {
-            { "tenant_roles", roles.ToList() }
+            { "app_roles", roles.ToList() } // Application-specific roles
         };
+        // {
 
-        if (!string.IsNullOrEmpty(user.OrganizationId))
-        {
-            attributes.Add("tenant_id", new List<string> { user.OrganizationId });
-        }
-        else
-        {
-            _logger.LogWarning("User {UserName} (Keycloak ID: {KeycloakUserId}) is missing OrganizationId. tenant_id attribute will not be synced.", user.UserName, user.KeycloakUserId);
-        }
+        //     AdditionalData = new Dictionary<string, object>
+        //     {
+        //         { "identity_roles", roles.ToList() } // Store roles in a separate attribute for easier access
+        //     }
+        // };
+
 
         try
         {

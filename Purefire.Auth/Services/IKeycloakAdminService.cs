@@ -1,4 +1,5 @@
 using Keycloak.AuthServices.Sdk.Kiota.Admin.Admin.Realms.Item.Organizations.Item.Members.InviteUser;
+using Keycloak.AuthServices.Sdk.Kiota.Admin.Admin.Realms.Item.Users.Item.UnmanagedAttributes;
 using Keycloak.AuthServices.Sdk.Kiota.Admin.Models;
 
 namespace Purefire.Auth.Services;
@@ -20,6 +21,9 @@ public interface IKeycloakAdminService
     Task<IEnumerable<OrganizationRepresentation>> GetOrganizationsAsync();
     Task<OrganizationRepresentation> GetOrganizationByIdAsync(string organizationId);
     Task<bool> CreateOrganizationAsync(OrganizationRepresentation organizationRepresentation);
-    Task UpdateUserAttributesAsync(string userId, Dictionary<string, List<string>> attributes);
+    // Task UpdateUserAttributesAsync(string userId, UserRepresentation_attributes? attributes);
+    Task UpdateUserAttributesAsync(string userId, Dictionary<string, object> attributes);
+
+    Task<UnmanagedAttributesGetResponse> GetUnmanagedAttributesAsync(string userId);
 
 }

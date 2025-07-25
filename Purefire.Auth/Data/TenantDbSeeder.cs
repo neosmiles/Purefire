@@ -16,9 +16,19 @@ namespace Purefire.Auth.Data
                 Name = "lg Tenant",
                 // ConnectionString = "Server=localhost;Database=DefaultTenantDb;Trusted_Connection=True;"
             };
-
             await context.TenantInfo.AddAsync(tenantInfo);
+           
+            
+            // Adding new tenant
+            var newTenantInfo = new TenantInfo
+            {
+                Id = "samsung",
+                Identifier = "samsung",
+                Name = "Samsung Tenant",
+            };
+            await context.TenantInfo.AddAsync(newTenantInfo);
             await context.SaveChangesAsync();
         }
+
     }
 }

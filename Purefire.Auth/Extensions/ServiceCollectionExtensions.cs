@@ -34,10 +34,10 @@ public static class ServiceCollectionExtensions
         services.AddMultiTenant<TenantInfo>()
             .WithEFCoreStore<TenantContext, TenantInfo>()
             // .WithHeaderStrategy("X-Tenant-ID")
-            .WithClaimStrategy("organization");
+            .WithClaimStrategy("organization")
             //.WithHostStrategy()          // subdomain
             // .WithRouteStrategy("{tenantId}")
-            //.WithStaticStrategy("lg");
+            .WithStaticStrategy("lg");
         #endregion
 
         // Add Identity
@@ -88,7 +88,7 @@ public static class ServiceCollectionExtensions
         #region Keycloak
         var adminSection = "KeycloakAdmin";
 
-        var adminClient = "admin";
+        var adminClient = "admin-api";
         var protectionClient = "protection";
 
         // Configure Keycloak authentication as the primary scheme

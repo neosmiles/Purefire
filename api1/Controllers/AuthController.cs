@@ -60,6 +60,27 @@ namespace api1.Controllers
             return Ok(new { token });
         }
 
+        /// <summary>
+        /// Authenticates a user through Keycloak and returns the response
+        /// </summary>
+        /// <param name="request">The Keycloak login credentials</param>
+        /// <returns>Keycloak authentication response</returns>
+        /// <response code="200">Returns the Keycloak token response</response>
+        /// <response code="401">If the credentials are invalid</response>
+        [HttpPost("login/keycloak")]
+        [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> LoginKeycloak([FromBody] KeycloakLoginRequest request)
+        {
+            var (success, response) = await _authService.LoginKeycloakAsync(request.Username, request.Password);
+            if (!success)
+            {
+                return Unauthorized(new { message = response });
+            }
+
+            return Ok(new { response });
+        }
+
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
@@ -186,6 +207,22 @@ namespace api1.Controllers
         /// The client secret
         /// </summary>
         public string ClientSecret { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// Request model for Keycloak authentication
+    /// </summary>
+    public class KeycloakLoginRequest
+    {
+        /// <summary>
+        /// The username for Keycloak authentication
+        /// </summary>
+        public string Username { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The password for Keycloak authentication
+        /// </summary>
+        public string Password { get; set; } = string.Empty;
     }
 
     /// <summary>

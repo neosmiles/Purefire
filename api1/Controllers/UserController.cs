@@ -1,3 +1,4 @@
+using Keycloak.AuthServices.Sdk.Admin.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Purefire.Auth.Models;
@@ -43,6 +44,26 @@ public class UserController(IAppUserService appUserService, ILogger<UserControll
             return StatusCode(500, "Internal server error");
         }
     }
+
+    [HttpGet("keycloakuser/{id}")]
+    public async Task<ActionResult<UserRepresentation>> GetKeycloakUser(string id)
+    {
+        try
+        {
+            var user = await appUserService.GetUserByKeycloakUserIdAsync(id);
+            if (user == null)
+            {
+                return NotFound();
+            }
+            return Ok(user);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error retrieving app user {UserId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
 
     [HttpPost]
     public async Task<ActionResult<AppUser>> CreateUser(string tenantId, AppUserCreateDto userDto)
@@ -123,69 +144,69 @@ public class UserController(IAppUserService appUserService, ILogger<UserControll
     }
 
     // Role management endpoints
-    [HttpGet("roles")]
-    public async Task<ActionResult<IEnumerable<RoleDto>>> GetRoles()
-    {
-        try
-        {
-            var roles = await appUserService.GetRolesAsync();
-            return Ok(roles);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error retrieving roles");
-            return StatusCode(500, "Internal server error");
-        }
-    }
+    //[HttpGet("roles")]
+    //public async Task<ActionResult<IEnumerable<RoleDto>>> GetRoles()
+    //{
+    //    try
+    //    {
+    //        var roles = await appUserService.GetRolesAsync();
+    //        return Ok(roles);
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        logger.LogError(ex, "Error retrieving roles");
+    //        return StatusCode(500, "Internal server error");
+    //    }
+    //}
 
-    [HttpGet("roles/{roleName}")]
-    public async Task<ActionResult<RoleDto>> GetRole(string roleName)
-    {
-        try
-        {
-            var role = await appUserService.GetRoleByNameAsync(roleName);
-            if (role == null)
-            {
-                return NotFound();
-            }
-            return Ok(role);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error retrieving role {RoleName}", roleName);
-            return StatusCode(500, "Internal server error");
-        }
-    }
+    //[HttpGet("roles/{roleName}")]
+    //public async Task<ActionResult<RoleDto>> GetRole(string roleName)
+    //{
+    //    try
+    //    {
+    //        var role = await appUserService.GetRoleByNameAsync(roleName);
+    //        if (role == null)
+    //        {
+    //            return NotFound();
+    //        }
+    //        return Ok(role);
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        logger.LogError(ex, "Error retrieving role {RoleName}", roleName);
+    //        return StatusCode(500, "Internal server error");
+    //    }
+    //}
 
-    [HttpPost("roles")]
-    public async Task<ActionResult> CreateRole(RoleDto role)
-    {
-        try
-        {
-            await appUserService.CreateRoleAsync(role);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error creating role");
-            return StatusCode(500, "Internal server error");
-        }
-    }
+    //[HttpPost("roles")]
+    //public async Task<ActionResult> CreateRole(RoleDto role)
+    //{
+    //    try
+    //    {
+    //        await appUserService.CreateRoleAsync(role);
+    //        return NoContent();
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        logger.LogError(ex, "Error creating role");
+    //        return StatusCode(500, "Internal server error");
+    //    }
+    //}
 
-    [HttpPost("{userId}/roles")]
-    public async Task<ActionResult> AssignRoleToUser(string userId, RoleDto role)
-    {
-        try
-        {
-            await appUserService.AssignRoleToUserAsync(userId, role);
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error assigning role to user {UserId}", userId);
-            return StatusCode(500, "Internal server error");
-        }
-    }
+    //[HttpPost("{userId}/roles")]
+    //public async Task<ActionResult> AssignRoleToUser(string userId, RoleDto role)
+    //{
+    //    try
+    //    {
+    //        await appUserService.AssignRoleToUserAsync(userId, role);
+    //        return NoContent();
+    //    }
+    //    catch (Exception ex)
+    //    {
+    //        logger.LogError(ex, "Error assigning role to user {UserId}", userId);
+    //        return StatusCode(500, "Internal server error");
+    //    }
+    //}
 
     // --- New ASP.NET Core Identity Role Management Endpoints ---
 
@@ -282,7 +303,7 @@ public class UserController(IAppUserService appUserService, ILogger<UserControll
             // Check if failure was due to user not found to return 404
             if (result.Errors.Any(e => e.Description.Contains($"User with ID '{userId}' not found")))
             {
-                 logger.LogWarning("Attempted to assign role {RoleName} to non-existent user {UserId}.", roleDto.RoleName, userId);
+                logger.LogWarning("Attempted to assign role {RoleName} to non-existent user {UserId}.", roleDto.RoleName, userId);
                 return NotFound($"User with ID '{userId}' not found.");
             }
             logger.LogWarning("Failed to assign ASP.NET Identity role {RoleName} to user {UserId}. Errors: {Errors}", roleDto.RoleName, userId, string.Join(", ", result.Errors.Select(e => e.Description)));

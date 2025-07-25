@@ -14,6 +14,7 @@ namespace Purefire.Auth.Services
     {
         Task<(bool success, string token)> LoginAsync(string email, string password);
         Task<(bool success, string token)> LoginServiceClientAsync(string clientId, string clientSecret);
+        Task<(bool success, string token)> LoginKeycloakAsync(string username, string password);
         Task<(bool success, string message)> RegisterAsync(string email, string password, string firstName, string lastName);
         Task<(bool success, string message)> CreateClientAsync(string clientId, string clientSecret, string name, string[] allowedScopes);
     }
@@ -75,6 +76,39 @@ namespace Purefire.Auth.Services
 
             var token = GenerateJwtToken(claims);
             return (true, token);
+        }
+
+        public async Task<(bool success, string token)> LoginKeycloakAsync(string username, string password)
+        {
+            try
+            {
+                var client = new HttpClient();
+                var request = new HttpRequestMessage(HttpMethod.Post, "https://keycloak.etraffika.com.ng/realms/zeus/protocol/openid-connect/token");
+                var collection = new List<KeyValuePair<string, string>>();
+                collection.Add(new("username", username));
+                collection.Add(new("password", password));
+                collection.Add(new("grant_type", "password"));
+                collection.Add(new("client_id", "apple-private"));
+                collection.Add(new("client_secret", "3J3xT5dQ7kIktZAhVdKFClPIAIyYk5wE"));
+                collection.Add(new("scope", "openid"));
+                var content = new FormUrlEncodedContent(collection);
+                request.Content = content;
+                var response = await client.SendAsync(request);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    return (true, responseContent);
+                }
+                else
+                {
+                    return (false, "Keycloak authentication failed");
+                }
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Keycloak authentication error: {ex.Message}");
+            }
         }
 
         public async Task<(bool success, string message)> RegisterAsync(string email, string password, string firstName, string lastName)

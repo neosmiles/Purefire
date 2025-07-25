@@ -43,6 +43,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUi(settings => settings.UseApplicationSwaggerSettings(app.Configuration));
 }
 
+// add cors
+//app.UseCors(policy =>
+//{
+//    policy.AllowAnyOrigin()
+//          .AllowAnyMethod()
+//          .AllowAnyHeader();
+//});
+
 //app.UseHttpsRedirection();
 app.UseMultiTenant();
 app.UseAuthentication();

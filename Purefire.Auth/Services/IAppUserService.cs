@@ -1,4 +1,5 @@
 using Purefire.Auth.Models;
+using Keycloak.AuthServices.Sdk.Kiota.Admin.Models;
 
 namespace Purefire.Auth.Services;
 
@@ -6,6 +7,7 @@ public interface IAppUserService
 {
     Task<IEnumerable<AppUser>> GetAllUsersAsync();
     Task<AppUser?> GetUserByIdAsync(string id);
+    Task<UserRepresentation> GetUserByKeycloakUserIdAsync(string keycloakUserId);
     Task<AppUser> CreateUserAsync(AppUser user, string? password = null, string? organizationId = null);
     Task UpdateUserAsync(AppUser user);
     Task DeleteUserAsync(string id);

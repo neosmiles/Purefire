@@ -1,5 +1,6 @@
 using Keycloak.AuthServices.Sdk.Kiota.Admin;
 using Keycloak.AuthServices.Sdk.Kiota.Admin.Admin.Realms.Item.Organizations.Item.Members.InviteUser;
+using Keycloak.AuthServices.Sdk.Kiota.Admin.Admin.Realms.Item.Users.Item.UnmanagedAttributes;
 using Keycloak.AuthServices.Sdk.Kiota.Admin.Models;
 using Microsoft.Kiota.Abstractions;
 
@@ -8,7 +9,7 @@ namespace Purefire.Auth.Services;
 public class KeycloakAdminService : IKeycloakAdminService
 {
     private readonly KeycloakAdminApiClient _adminApiClient;
-    private const string DefaultRealm = "dark-vader";
+    private const string DefaultRealm = "zeus";
 
     public KeycloakAdminService(KeycloakAdminApiClient adminApiClient)
     {
@@ -44,6 +45,7 @@ public class KeycloakAdminService : IKeycloakAdminService
         return createdUser ?? new UserRepresentation();  // Fallback if we couldn't retrieve the user (this shouldn't normally happen)
     }
 
+    //add login
 
 
     public async Task UpdateUserAsync(string userId, UserRepresentation userRepresentation)
@@ -150,12 +152,71 @@ public class KeycloakAdminService : IKeycloakAdminService
         }
     }
 
-    public async Task UpdateUserAttributesAsync(string userId, Dictionary<string, List<string>> attributes)
+    /* public async Task UpdateUserAttributesAsync(string userId, UserRepresentation_attributes? attributes)
     {
         var userRepresentation = new UserRepresentation
         {
             Attributes = attributes
         };
-        await _adminApiClient.Admin.Realms[DefaultRealm].Users[userId].PutAsync(userRepresentation);
+        var df = await _adminApiClient.Admin.Realms[DefaultRealm].Users[userId].PutAsync(userRepresentation);
+    } */
+
+    public async Task UpdateUserAttributesAsync(string userId, Dictionary<string, object> attributes)
+    {
+        // First, get the existing user to avoid clearing other fields
+        var existingUser = await _adminApiClient.Admin.Realms[DefaultRealm].Users[userId].GetAsync();
+
+        if (existingUser == null)
+        {
+            throw new InvalidOperationException($"User with ID {userId} not found");
+        }
+
+        // Initialize attributes if null, otherwise preserve existing ones
+        if (existingUser.Attributes == null)
+        {
+            
+            existingUser.Attributes = new UserRepresentation_attributes
+            {
+                AdditionalData = new Dictionary<string, object>()
+            };
+        }
+        else if (existingUser.Attributes.AdditionalData == null)
+        {
+            existingUser.Attributes.AdditionalData = new Dictionary<string, object>();
+        }
+
+        // Update/add the new attributes (preserving existing ones)
+        foreach (var kvp in attributes)
+        {
+            // Convert values to string list (Keycloak stores attributes as string arrays)
+            List<string> stringValues;
+
+            if (kvp.Value is IEnumerable<string> enumerable && !(kvp.Value is string))
+            {
+                stringValues = enumerable.ToList();
+            }
+            else if (kvp.Value is string str)
+            {
+                stringValues = new List<string> { str };
+            }
+            else
+            {
+                stringValues = new List<string> { kvp.Value?.ToString() ?? string.Empty };
+            }
+
+            existingUser.Attributes.AdditionalData[kvp.Key] = stringValues;
+        }
+
+        // Update the user with the modified attributes
+        await _adminApiClient.Admin.Realms[DefaultRealm].Users[userId].PutAsync(existingUser);
+    }
+    public async Task<UnmanagedAttributesGetResponse> GetUnmanagedAttributesAsync(string userId)
+    {
+
+        // This method is used to update unmanaged attributes of a user
+        // It retrieves the current unmanaged attributes and returns them
+        // You can modify this method to update specific attributes as needed
+        var unmanagedAttributes = await _adminApiClient.Admin.Realms[DefaultRealm].Users[userId].UnmanagedAttributes.GetAsync();
+        return unmanagedAttributes;
     }
 }

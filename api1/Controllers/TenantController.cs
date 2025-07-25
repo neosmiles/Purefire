@@ -1,4 +1,5 @@
 using Keycloak.AuthServices.Sdk.Kiota.Admin.Admin.Realms.Item.Organizations.Item.Members.InviteUser;
+using Keycloak.AuthServices.Sdk.Kiota.Admin.Admin.Realms.Item.Users.Item.UnmanagedAttributes;
 using Keycloak.AuthServices.Sdk.Kiota.Admin.Models;
 using Microsoft.AspNetCore.Mvc;
 using Purefire.Auth.Services;
@@ -119,6 +120,26 @@ public class TenantController(IKeycloakAdminService keycloakAdmin, ILogger<Tenan
         }
     }
 
+
+
+    [HttpGet("unmanaged-attributes/{userId}")]
+    public async Task<ActionResult<UnmanagedAttributesGetResponse>> GetUnmanagedAttributes(string userId)
+    {
+        try
+        {
+            var unmanagedAttributes = await keycloakAdmin.GetUnmanagedAttributesAsync(userId);
+            if (unmanagedAttributes == null)
+            {
+                return NotFound();
+            }
+            return Ok(unmanagedAttributes);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error retrieving unmanaged attributes for user {UserId}", userId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
 
 
 }
