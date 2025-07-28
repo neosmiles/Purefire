@@ -1,3 +1,6 @@
+using Keycloak.AuthServices.Authentication;
+using Keycloak.AuthServices.Common;
+using Keycloak.AuthServices.Sdk;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 namespace api2.Extensions;

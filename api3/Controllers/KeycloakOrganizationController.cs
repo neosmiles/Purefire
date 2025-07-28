@@ -124,7 +124,7 @@ public class KeycloakOrganizationController(IKeycloakAdminService keycloakAdmin,
         }
     }
 
-    [HttpGet("debug/organizations")]
+    /* [HttpGet("debug/organizations")]
     public async Task<ActionResult> DebugOrganizations()
     {
         try
@@ -212,5 +212,5 @@ public class KeycloakOrganizationController(IKeycloakAdminService keycloakAdmin,
             logger.LogError(ex, "Error getting configuration info");
             return StatusCode(500, "Internal server error");
         }
-    }
+    } */
 }

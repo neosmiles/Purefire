@@ -1,28 +1,45 @@
-# Keycloak + ASP.NET Identity Integration - Implementation Guide
+# Purefire Authentication System - Implementation Guide
 
-**Project**: Purefire Identity Service  
-**Version**: 1.0  
-**Date**: July 17, 2025  
-**Status**: Prototype/Reference Implementation
+**Project**: Purefire Authentication System  
+**Version**: 2.0  
+**Date**: July 28, 2025  
+**Status**: Refactored Implementation
 
 ## 📋 Overview
 
-This document describes the implementation of a Keycloak + ASP.NET Identity integration that serves as a reference architecture for other services. The solution provides JWT-based authentication, role-based authorization, and multi-tenant support.
+This document describes the implementation of a simplified authentication system built with ASP.NET Core and Keycloak. The refactored solution provides JWT-based authentication for both user scenarios and machine-to-machine (M2M) communication, with a clean microservices architecture.
 
 ## 🏗️ Architecture Overview
 
 ### Core Components
 
 - **Keycloak**: External identity provider and token issuer
-- **ASP.NET Identity**: Local user and role management
-- **Finbuckle.MultiTenant**: Multi-tenancy support
-- **SQL Server**: User data and tenant persistence
-- **JWT Bearer**: Token-based authentication
+- **ASP.NET Identity**: Local user and role management (api3)
+- **Finbuckle.MultiTenant**: Multi-tenancy support (api3)
+- **SQL Server**: User data and tenant persistence (api3)
+- **JWT Bearer**: Token-based authentication (all APIs)
+- **Client Credentials Flow**: Machine-to-machine authentication (api2)
+
+### Service Architecture
+
+```
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│    API2     │    │    API3     │    │  Keycloak   │
+│ (M2M Focus) │◄──►│(User/Tenant)│◄──►│ (Identity)  │
+│             │    │             │    │             │
+└─────────────┘    └─────────────┘    └─────────────┘
+      ▲                  ▲                    ▲
+      │                  │                    │
+      ▼                  ▼                    ▼
+Client Credentials   ASP.NET Identity    JWT Tokens
+  Flow (M2M)        + Multi-Tenant       + Roles
+```
 
 ### Data Flow
 
 ```
-Client → Keycloak (Authentication) → JWT Token → API (Validation) → ASP.NET Identity (Authorization)
+1. User Authentication: Client → Keycloak → JWT Token → API3 → ASP.NET Identity
+2. M2M Authentication: Service → Keycloak → JWT Token → API2 → Protected Resources
 ```
 
 ---
@@ -33,19 +50,34 @@ Client → Keycloak (Authentication) → JWT Token → API (Validation) → ASP.
 
 ```
 Purefire/
-├── api1/                          # Main API project
-│   ├── Controllers/               # API controllers
-│   │   ├── AuthController.cs      # Authentication endpoints
+├── api2/                          # Machine-to-Machine API
+│   ├── Controllers/               # M2M endpoints
+│   │   └── DataController.cs      # Protected M2M operations
+│   ├── Services/                  # M2M business logic
+│   │   └── ExampleApiCallService.cs # Service-to-service calls
+│   ├── Extensions/                # M2M configuration
+│   │   └── ServiceCollectionExtensions.cs # Auth setup
+│   └── Program.cs                 # M2M API configuration
+├── api3/                          # User & Tenant Management API
+│   ├── Controllers/               # User/tenant endpoints
+│   │   ├── SecuredController.cs   # Protected user endpoints
 │   │   ├── UserController.cs      # User management
-│   │   ├── TenantController.cs    # Tenant operations
-│   │   └── ClientsController.cs   # Client management
-│   ├── Program.cs                 # Application configuration
-│   └── appsettings.json          # Configuration settings
-└── Purefire.Auth/                # Shared authentication library
-    ├── Data/                     # Database contexts
-    ├── Models/                   # Entity models
-    ├── Services/                 # Business logic
-    └── Extensions/               # Service configuration
+│   │   └── KeycloakOrganizationController.cs # Organization ops
+│   ├── Data/                      # Database contexts
+│   │   ├── AuthDbContext.cs       # Identity context
+│   │   └── TenantContext.cs       # Multi-tenant context
+│   ├── Models/                    # Entity models
+│   │   ├── AppUser.cs             # User entity
+│   │   └── UserDtos.cs            # Data transfer objects
+│   ├── Services/                  # Business logic
+│   │   ├── AppUserService.cs      # User operations
+│   │   ├── KeycloakAdminService.cs # Keycloak integration
+│   │   └── UserSyncService.cs     # User synchronization
+│   ├── Extensions/                # Service configuration
+│   │   ├── ServiceCollectionExtensions.cs # Auth + MultiTenant setup
+│   │   └── SwaggerExtensions.cs   # API documentation
+│   └── Program.cs                 # Application configuration
+└── Purefire.sln                  # Solution file
 ```
 
 ### 2. Key Dependencies
@@ -56,6 +88,7 @@ Purefire/
 <PackageReference Include="Keycloak.AuthServices.Authentication" />
 <PackageReference Include="Keycloak.AuthServices.Sdk" />
 <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+<PackageReference Include="Duende.AccessTokenManagement" />
 ```
 
 ### 3. Configuration Setup
@@ -92,6 +125,28 @@ Purefire/
 
 ### 1. Service Registration (Program.cs)
 
+#### API2 (M2M Focus)
+
+```csharp
+// Add authentication services
+builder.Services.AddAuthServices(builder.Configuration);
+
+// M2M-specific service registration
+builder.Services.AddScoped<ExampleApiCallService>();
+
+// Configure Client Credentials Token Management
+services.AddClientCredentialsTokenManagement()
+    .AddClient("protection", client =>
+    {
+        var options = configuration.GetKeycloakOptions<KeycloakProtectionClientOptions>()!;
+        client.ClientId = options.Resource;
+        client.ClientSecret = options.Credentials.Secret;
+        client.TokenEndpoint = options.KeycloakTokenEndpoint;
+    });
+```
+
+#### API3 (User/Tenant Focus)
+
 ```csharp
 // Add authentication services
 builder.Services.AddAuthServices(builder.Configuration);
@@ -120,10 +175,6 @@ public async Task<IActionResult> KeycloakTest([FromBody] LoginRequest request)
 {
     // Authenticate with Keycloak
     var tokenResponse = await keycloakService.AuthenticateAsync(request);
-
-    // Sync user data to local ASP.NET Identity
-    var user = await userService.SyncUserFromKeycloakAsync(tokenResponse.UserId);
-
     return Ok(new { token = tokenResponse.AccessToken });
 }
 ```
@@ -145,10 +196,6 @@ public async Task<IActionResult> CreateRole([FromBody] CreateRoleRequest request
 {
     // Create role in ASP.NET Identity
     var result = await roleManager.CreateAsync(new IdentityRole(request.RoleName));
-
-    // Sync role to Keycloak as user attribute
-    await keycloakService.SyncRoleToKeycloakAsync(request.RoleName);
-
     return Ok(result);
 }
 ```
@@ -161,12 +208,107 @@ public async Task<IActionResult> AssignRole(string userId, [FromBody] AssignRole
 {
     var user = await userManager.FindByIdAsync(userId);
     var result = await userManager.AddToRoleAsync(user, request.RoleName);
-
-    // Update Keycloak user attributes
-    await keycloakService.UpdateUserAttributesAsync(userId, roles);
-
     return Ok(result);
 }
+```
+
+---
+
+## 🔄 Machine-to-Machine (M2M) Communication
+
+### 1. API2 M2M Implementation
+
+#### Service Registration
+
+```csharp
+// API2 Extensions/ServiceCollectionExtensions.cs
+services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddKeycloakWebApi(configuration);
+
+// Register HttpClient with automatic token management
+services.AddHttpClient("protection")
+    .AddClientCredentialsTokenHandler(protectionClient);
+
+services.AddClientCredentialsTokenManagement()
+    .AddClient(protectionClient, client =>
+    {
+        var options = configuration.GetKeycloakOptions<KeycloakProtectionClientOptions>()!;
+        client.ClientId = options.Resource;
+        client.ClientSecret = options.Credentials.Secret;
+        client.TokenEndpoint = options.KeycloakTokenEndpoint;
+    });
+```
+
+#### M2M Service Implementation
+
+```csharp
+public class ExampleApiCallService
+{
+    private readonly HttpClient _httpClient;
+
+    public ExampleApiCallService(IHttpClientFactory httpClientFactory)
+    {
+        _httpClient = httpClientFactory.CreateClient("protection");
+    }
+
+    public async Task<string> CallApiAsync()
+    {
+        // Token automatically retrieved and added to Authorization header
+        var response = await _httpClient.GetAsync("http://localhost:5007/Secured");
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        return $"Error: {response.StatusCode}";
+    }
+}
+```
+
+#### M2M Controller Endpoints
+
+```csharp
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class DataController : ControllerBase
+{
+    [AllowAnonymous]
+    [HttpGet("example-api-call")]
+    public async Task<IActionResult> ExampleApiCall()
+    {
+        var result = await _exampleApiCallService.CallApiAsync();
+        return Ok(result);
+    }
+
+    [AllowAnonymous]
+    [HttpGet("example-token-retrieval")]
+    public async Task<IActionResult> ExampleTokenRetrieval()
+    {
+        var token = await _tokenService.GetAccessTokenAsync("protection");
+        return Ok(new { Token = token });
+    }
+}
+```
+
+### 2. Token Management
+
+#### Automatic Token Handling
+
+```csharp
+// Automatic token retrieval and refresh
+var token = await _tokenService.GetAccessTokenAsync("protection");
+
+// Direct HTTP call with token
+using var httpClient = new HttpClient();
+httpClient.DefaultRequestHeaders.Authorization =
+    new AuthenticationHeaderValue("Bearer", token.AccessToken);
+var result = await httpClient.GetAsync("http://localhost:5007/Secured");
 ```
 
 ---
@@ -206,10 +348,6 @@ public async Task<IActionResult> CreateOrganization([FromBody] CreateOrgRequest 
 {
     // Create tenant in local database
     var tenant = await tenantService.CreateAsync(request.Name);
-
-    // Create organization in Keycloak
-    await keycloakService.CreateOrganizationAsync(request.Name);
-
     return Ok(tenant);
 }
 ```

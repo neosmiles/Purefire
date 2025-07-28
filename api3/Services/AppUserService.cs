@@ -104,11 +104,11 @@ public class AppUserService(
         user.OrganizationId = organizationId;
 
         // Create user locally using UserManager
-        //var result = await userManager.CreateAsync(user, password ?? "TempPassword123!");
-        //if (!result.Succeeded)
-        //{
-        //    throw new InvalidOperationException($"Failed to create local user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
-        //}
+        var result = await userManager.CreateAsync(user, password ?? "TempPassword123!");
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException($"Failed to create local user: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+        }
 
         // If an organization ID is provided, assign the user to the organization in Keycloak
         if (!string.IsNullOrEmpty(organizationId))

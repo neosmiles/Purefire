@@ -2,6 +2,7 @@ using api2.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Headers;
+using Duende.AccessTokenManagement;
 
 namespace api2.Controllers
 {
