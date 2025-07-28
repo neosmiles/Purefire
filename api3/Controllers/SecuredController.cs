@@ -11,7 +11,7 @@ public class SecuredController : ControllerBase
     [Authorize]
     public IActionResult Get()
     {
-        return Ok(new { message = "This is a secured endpoint", user = User.Identity?.Name });
+        return Ok(new { message = "This is a secured endpoint powered by Neosmiles", user = User.Identity?.Name });
     }
 
     [HttpGet("admin")]

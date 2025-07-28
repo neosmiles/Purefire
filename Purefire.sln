@@ -3,11 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36202.13
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "api1", "api1\api1.csproj", "{3B3A173B-3065-42FC-8275-D5FFB79356B4}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "api2", "api2\api2.csproj", "{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Purefire.Auth", "Purefire.Auth\Purefire.Auth.csproj", "{7E36D980-1011-52F1-8B26-53B9C7F2A02C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "api3", "api3\api3.csproj", "{324EC242-562C-42CF-B8A6-90CCC6AE0BB6}"
 EndProject
@@ -17,18 +13,10 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{3B3A173B-3065-42FC-8275-D5FFB79356B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3B3A173B-3065-42FC-8275-D5FFB79356B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3B3A173B-3065-42FC-8275-D5FFB79356B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3B3A173B-3065-42FC-8275-D5FFB79356B4}.Release|Any CPU.Build.0 = Release|Any CPU
 		{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{82C21E64-DE68-48F9-8C77-4D0A26FD9F3E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7E36D980-1011-52F1-8B26-53B9C7F2A02C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7E36D980-1011-52F1-8B26-53B9C7F2A02C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7E36D980-1011-52F1-8B26-53B9C7F2A02C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7E36D980-1011-52F1-8B26-53B9C7F2A02C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{324EC242-562C-42CF-B8A6-90CCC6AE0BB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{324EC242-562C-42CF-B8A6-90CCC6AE0BB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{324EC242-562C-42CF-B8A6-90CCC6AE0BB6}.Release|Any CPU.ActiveCfg = Release|Any CPU

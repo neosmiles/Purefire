@@ -1,8 +1,6 @@
-using Microsoft.AspNetCore.Identity;
+using api2.Extensions;
+using api2.Services;
 using Microsoft.OpenApi.Models;
-using Purefire.Auth.Data;
-using Purefire.Auth.Extensions;
-using Purefire.Auth.Models;
 using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,27 +11,8 @@ builder.Services.AddControllers();
 // Add authentication services
 builder.Services.AddAuthServices(builder.Configuration);
 
-// Add Authorization Policies
-builder.Services.AddAuthorization(options =>
-{
-    // Policy for service clients (M2M)
-    options.AddPolicy("ServiceClient", policy =>
-        policy.RequireClaim("client_id"));
+builder.Services.AddScoped<ExampleApiCallService>();
 
-    // Policy for Admin users or service clients
-    options.AddPolicy("AdminOrService", policy =>
-        policy.RequireAssertion(context =>
-            context.User.IsInRole("Admin") ||
-            context.User.HasClaim(c => c.Type == "client_id")));
-
-    // Policy for requiring api2 scope
-    options.AddPolicy("RequireApi2Scope", policy =>
-        policy.RequireAssertion(context =>
-        {
-            var scopeClaim = context.User.FindFirst("scope");
-            return scopeClaim != null && scopeClaim.Value.Contains("api2");
-        }));
-});
 
 // Configure Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
@@ -87,15 +66,7 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Seed the database
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    var context = services.GetRequiredService<AuthDbContext>();
-    var userManager = services.GetRequiredService<UserManager<AppUser>>();
-    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-    await DbSeeder.SeedDataAsync(context, userManager, roleManager);
-}
+
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -114,29 +85,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-/* var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi(); */
 
 app.Run();
-
-/* internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-} */
