@@ -19,6 +19,7 @@
     <PackageReference Include="Keycloak.AuthServices.Authentication" Version="2.6.0" />
     <PackageReference Include="Keycloak.AuthServices.Authorization" Version="2.6.0" />
     <PackageReference Include="Keycloak.AuthServices.Sdk" Version="2.6.0" />
+     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
 </Project>

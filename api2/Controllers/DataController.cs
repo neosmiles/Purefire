@@ -84,6 +84,29 @@ namespace api2.Controllers
         }
 
         /// <summary>
+        /// Example endpoint to demonstrate API call service to a protected role
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet("example-api-call-to-protected-role")]
+        public async Task<IActionResult> ExampleApiCallToProtectedRole()
+        {
+            var result = await _exampleApiCallService.CallApiRoleAsync();
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Example endpoint to demonstrate API call service to a protected scope
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet("example-api-call-to-protected-scope")]
+        public async Task<IActionResult> ExampleApiCallToProtectedScope()
+        {
+            var result = await _exampleApiCallService.CallApiScopedAsync();
+            return Ok(result);
+        }
+
+
+        /// <summary>
         /// Example endpoint to demonstrate token retrieval
         /// </summary>
         [AllowAnonymous]

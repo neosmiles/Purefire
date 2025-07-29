@@ -15,31 +15,34 @@ This document describes the implementation of a simplified authentication system
 
 - **Keycloak**: External identity provider and token issuer
 - **ASP.NET Identity**: Local user and role management (api3)
-- **Finbuckle.MultiTenant**: Multi-tenancy support (api3)
-- **SQL Server**: User data and tenant persistence (api3)
+- **SQL Server**: User data persistence (api3)
 - **JWT Bearer**: Token-based authentication (all APIs)
 - **Client Credentials Flow**: Machine-to-machine authentication (api2)
+- **JWT Events**: Custom role mapping from Keycloak tokens
+- **Header-based Multi-tenancy**: Organization isolation via headers
 
 ### Service Architecture
 
 ```
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │    API2     │    │    API3     │    │  Keycloak   │
-│ (M2M Focus) │◄──►│(User/Tenant)│◄──►│ (Identity)  │
+│ (M2M Focus) │◄──►│(User Focus) │◄──►│ (Identity)  │
 │             │    │             │    │             │
 └─────────────┘    └─────────────┘    └─────────────┘
       ▲                  ▲                    ▲
       │                  │                    │
       ▼                  ▼                    ▼
 Client Credentials   ASP.NET Identity    JWT Tokens
-  Flow (M2M)        + Multi-Tenant       + Roles
+  Flow (M2M)        + Role Mapping       + Roles
+                    + Header Tenancy
 ```
 
 ### Data Flow
 
 ```
-1. User Authentication: Client → Keycloak → JWT Token → API3 → ASP.NET Identity
+1. User Authentication: Client → Keycloak → JWT Token → API3 → ASP.NET Identity + Role Mapping
 2. M2M Authentication: Service → Keycloak → JWT Token → API2 → Protected Resources
+3. Multi-tenancy: All requests include OrganizationId header for tenant isolation
 ```
 
 ---
@@ -58,14 +61,13 @@ Purefire/
 │   ├── Extensions/                # M2M configuration
 │   │   └── ServiceCollectionExtensions.cs # Auth setup
 │   └── Program.cs                 # M2M API configuration
-├── api3/                          # User & Tenant Management API
-│   ├── Controllers/               # User/tenant endpoints
+├── api3/                          # User Management API
+│   ├── Controllers/               # User endpoints
 │   │   ├── SecuredController.cs   # Protected user endpoints
 │   │   ├── UserController.cs      # User management
 │   │   └── KeycloakOrganizationController.cs # Organization ops
 │   ├── Data/                      # Database contexts
-│   │   ├── AuthDbContext.cs       # Identity context
-│   │   └── TenantContext.cs       # Multi-tenant context
+│   │   └── AuthDbContext.cs       # Identity context
 │   ├── Models/                    # Entity models
 │   │   ├── AppUser.cs             # User entity
 │   │   └── UserDtos.cs            # Data transfer objects
@@ -74,7 +76,7 @@ Purefire/
 │   │   ├── KeycloakAdminService.cs # Keycloak integration
 │   │   └── UserSyncService.cs     # User synchronization
 │   ├── Extensions/                # Service configuration
-│   │   ├── ServiceCollectionExtensions.cs # Auth + MultiTenant setup
+│   │   ├── ServiceCollectionExtensions.cs # Auth setup
 │   │   └── SwaggerExtensions.cs   # API documentation
 │   └── Program.cs                 # Application configuration
 └── Purefire.sln                  # Solution file
@@ -83,12 +85,12 @@ Purefire/
 ### 2. Key Dependencies
 
 ```xml
-<PackageReference Include="Finbuckle.MultiTenant" />
 <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
 <PackageReference Include="Keycloak.AuthServices.Authentication" />
 <PackageReference Include="Keycloak.AuthServices.Sdk" />
 <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
 <PackageReference Include="Duende.AccessTokenManagement" />
+<PackageReference Include="Newtonsoft.Json" />
 ```
 
 ### 3. Configuration Setup
@@ -151,21 +153,75 @@ services.AddClientCredentialsTokenManagement()
 // Add authentication services
 builder.Services.AddAuthServices(builder.Configuration);
 
-// Configure multi-tenancy
-services.AddMultiTenant<TenantInfo>()
-    .WithEFCoreStore<TenantContext, TenantInfo>()
-    .WithClaimStrategy("organization");
-
-// Configure Keycloak + ASP.NET Identity
+// Configure ASP.NET Identity
 services.AddIdentity<AppUser, IdentityRole>()
     .AddEntityFrameworkStores<AuthDbContext>()
     .AddDefaultTokenProviders();
 
+// Configure Keycloak with JWT Events for role mapping
 services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddKeycloakWebApi(configuration);
+    .AddKeycloakWebApi(configuration, options =>
+    {
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                if (context.Principal?.Identity is ClaimsIdentity claimsIdentity)
+                {
+                    var realmRoles = context.Principal.FindFirst("realm_access")?.Value;
+                    if (!string.IsNullOrEmpty(realmRoles))
+                    {
+                        var parsed = JObject.Parse(realmRoles);
+                        var roles = parsed["roles"]?.ToObject<List<string>>();
+                        if (roles != null)
+                        {
+                            foreach (var role in roles)
+                                claimsIdentity.AddClaim(new Claim(ClaimTypes.Role, role));
+                        }
+                    }
+                }
+                return Task.CompletedTask;
+            }
+        };
+        options.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
+    });
 ```
 
-### 2. JWT Token Flow
+### 2. JWT Token Flow & Role Mapping
+
+#### JWT Events for Role Mapping
+
+```csharp
+.AddKeycloakWebApi(configuration, options =>
+{
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = context =>
+        {
+            if (context.Principal?.Identity is ClaimsIdentity claimsIdentity)
+            {
+                // Extract realm roles from Keycloak token
+                var realmRoles = context.Principal.FindFirst("realm_access")?.Value;
+                if (!string.IsNullOrEmpty(realmRoles))
+                {
+                    var parsed = JObject.Parse(realmRoles);
+                    var roles = parsed["roles"]?.ToObject<List<string>>();
+                    if (roles != null)
+                    {
+                        // Add each role as a ClaimTypes.Role claim
+                        foreach (var role in roles)
+                            claimsIdentity.AddClaim(new Claim(ClaimTypes.Role, role));
+                    }
+                }
+            }
+            return Task.CompletedTask;
+        }
+    };
+
+    // Ensure the role claim type is correctly mapped
+    options.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
+});
+```
 
 #### Authentication Endpoint
 
@@ -182,7 +238,7 @@ public async Task<IActionResult> KeycloakTest([FromBody] LoginRequest request)
 #### Token Validation Middleware
 
 ```csharp
-app.UseAuthentication(); // Validates JWT tokens
+app.UseAuthentication(); // Validates JWT tokens and processes events
 app.UseAuthorization();  // Applies role-based policies
 ```
 
@@ -313,42 +369,225 @@ var result = await httpClient.GetAsync("http://localhost:5007/Secured");
 
 ---
 
-## 🏢 Multi-Tenancy Implementation
+## 🏢 Header-Based Multi-Tenancy
 
-### 1. Tenant Context Strategy
+### 1. Organization Header Implementation
 
-```csharp
-services.AddMultiTenant<TenantInfo>()
-    .WithClaimStrategy("organization"); // Uses JWT claim for tenant resolution
+#### Request Header Strategy
+
+```http
+GET /api/users HTTP/1.1
+Host: localhost:5007
+Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+OrganizationId: org-123
+Content-Type: application/json
 ```
 
-### 2. Tenant Data Isolation
+### 2. Controller Implementation
 
-#### Tenant-Aware Controller
+#### Extracting Organization from Headers
 
 ```csharp
 [ApiController]
-public class TenantController : ControllerBase
+[Route("api/[controller]")]
+[Authorize]
+public class UserController : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetTenantData()
+    public async Task<IActionResult> GetUsers()
     {
-        var tenantId = HttpContext.GetMultiTenantContext()?.TenantInfo?.Id;
-        var data = await dataService.GetTenantDataAsync(tenantId);
-        return Ok(data);
+        // Extract organization ID from request headers
+        var organizationId = Request.Headers["OrganizationId"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(organizationId))
+        {
+            return BadRequest("OrganizationId header is required");
+        }
+
+        // Use organization ID for data filtering
+        var users = await _userService.GetUsersByOrganizationAsync(organizationId);
+        return Ok(users);
     }
 }
 ```
 
-### 3. Organization Management
+#### Base Controller for Multi-Tenancy
 
 ```csharp
-[HttpPost]
-public async Task<IActionResult> CreateOrganization([FromBody] CreateOrgRequest request)
+[ApiController]
+public abstract class TenantAwareController : ControllerBase
 {
-    // Create tenant in local database
-    var tenant = await tenantService.CreateAsync(request.Name);
-    return Ok(tenant);
+    protected string GetOrganizationId()
+    {
+        return Request.Headers["OrganizationId"].FirstOrDefault()
+               ?? throw new ArgumentException("OrganizationId header is required");
+    }
+
+    protected async Task<IActionResult> ExecuteWithTenant<T>(
+        Func<string, Task<T>> operation)
+    {
+        try
+        {
+            var organizationId = GetOrganizationId();
+            var result = await operation(organizationId);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
+}
+```
+
+### 3. Service Layer Implementation
+
+#### Tenant-Aware Service
+
+```csharp
+public class AppUserService : IAppUserService
+{
+    private readonly AuthDbContext _context;
+
+    public AppUserService(AuthDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<AppUser>> GetUsersByOrganizationAsync(string organizationId)
+    {
+        return await _context.Users
+            .Where(u => u.OrganizationId == organizationId)
+            .ToListAsync();
+    }
+
+    public async Task<AppUser> CreateUserAsync(AppUser user, string organizationId)
+    {
+        user.OrganizationId = organizationId;
+        user.CreatedAt = DateTime.UtcNow;
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+
+        return user;
+    }
+}
+```
+
+### 4. Data Model Updates
+
+#### Updated AppUser Entity
+
+```csharp
+public class AppUser : IdentityUser
+{
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? KeycloakUserId { get; set; }
+    public string OrganizationId { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public bool IsActive { get; set; }
+}
+```
+
+#### ITenantEntity Interface
+
+```csharp
+public interface ITenantEntity
+{
+    string OrganizationId { get; set; }
+}
+
+// Apply to all entities that need tenant isolation
+public class AppUser : IdentityUser, ITenantEntity
+{
+    // ... existing properties
+    public string OrganizationId { get; set; } = string.Empty;
+}
+```
+
+### 5. Middleware for Header Validation
+
+#### Organization Header Middleware
+
+```csharp
+public class OrganizationHeaderMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<OrganizationHeaderMiddleware> _logger;
+
+    public OrganizationHeaderMiddleware(RequestDelegate next, ILogger<OrganizationHeaderMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        // Skip validation for non-API endpoints
+        if (!context.Request.Path.StartsWithSegments("/api"))
+        {
+            await _next(context);
+            return;
+        }
+
+        // Skip validation for authentication endpoints
+        if (context.Request.Path.StartsWithSegments("/api/auth"))
+        {
+            await _next(context);
+            return;
+        }
+
+        var organizationId = context.Request.Headers["OrganizationId"].FirstOrDefault();
+
+        if (string.IsNullOrEmpty(organizationId))
+        {
+            _logger.LogWarning("Request to {Path} missing OrganizationId header", context.Request.Path);
+            context.Response.StatusCode = 400;
+            await context.Response.WriteAsync("OrganizationId header is required");
+            return;
+        }
+
+        // Add organization ID to context for easy access
+        context.Items["OrganizationId"] = organizationId;
+
+        await _next(context);
+    }
+}
+
+// Register in Program.cs
+app.UseMiddleware<OrganizationHeaderMiddleware>();
+```
+
+### 6. HTTP Client Configuration for M2M
+
+#### M2M with Organization Headers
+
+```csharp
+public class ExampleApiCallService
+{
+    private readonly HttpClient _httpClient;
+
+    public ExampleApiCallService(IHttpClientFactory httpClientFactory)
+    {
+        _httpClient = httpClientFactory.CreateClient("protection");
+    }
+
+    public async Task<string> CallApiAsync(string organizationId)
+    {
+        // Add organization header to M2M requests
+        _httpClient.DefaultRequestHeaders.Remove("OrganizationId");
+        _httpClient.DefaultRequestHeaders.Add("OrganizationId", organizationId);
+
+        var response = await _httpClient.GetAsync("http://localhost:5007/Secured");
+
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadAsStringAsync();
+        }
+
+        return $"Error: {response.StatusCode}";
+    }
 }
 ```
 
@@ -366,20 +605,9 @@ public class AppUser : IdentityUser
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? KeycloakUserId { get; set; }
+    public string OrganizationId { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; }
     public bool IsActive { get; set; }
-}
-```
-
-#### TenantInfo (Multi-tenancy)
-
-```csharp
-public class TenantInfo : ITenantInfo
-{
-    public string Id { get; set; }
-    public string Identifier { get; set; }
-    public string Name { get; set; }
-    public string ConnectionString { get; set; }
 }
 ```
 
@@ -393,7 +621,18 @@ public class AuthDbContext : IdentityDbContext<AppUser>
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
-        // Custom configurations
+
+        // Add indexes for organization-based queries
+        builder.Entity<AppUser>()
+            .HasIndex(u => u.OrganizationId)
+            .HasDatabaseName("IX_Users_OrganizationId");
+    }
+
+    // Override SaveChanges to ensure organization isolation
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        // Additional validation can be added here
+        return await base.SaveChangesAsync(cancellationToken);
     }
 }
 ```
@@ -430,8 +669,9 @@ public class SecureController : ControllerBase
     {
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value);
+        var organizationId = Request.Headers["OrganizationId"].FirstOrDefault();
 
-        return Ok(new { userId, roles });
+        return Ok(new { userId, roles, organizationId });
     }
 }
 ```
@@ -441,16 +681,24 @@ public class SecureController : ControllerBase
 ```csharp
 public class UserContextService
 {
-    public UserContext GetCurrentUser(ClaimsPrincipal principal)
+    public UserContext GetCurrentUser(ClaimsPrincipal principal, HttpContext httpContext)
     {
         return new UserContext
         {
             UserId = principal.FindFirst("sub")?.Value,
             Email = principal.FindFirst("email")?.Value,
             Roles = principal.FindAll("role").Select(c => c.Value).ToList(),
-            Organization = principal.FindFirst("organization")?.Value
+            OrganizationId = httpContext.Request.Headers["OrganizationId"].FirstOrDefault()
         };
     }
+}
+
+public class UserContext
+{
+    public string? UserId { get; set; }
+    public string? Email { get; set; }
+    public List<string> Roles { get; set; } = new();
+    public string? OrganizationId { get; set; }
 }
 ```
 
@@ -470,7 +718,14 @@ public class NewController : ControllerBase
     [Authorize(Roles = "User,Admin")] // Role-based access
     public async Task<IActionResult> GetData()
     {
-        // Implementation
+        var organizationId = Request.Headers["OrganizationId"].FirstOrDefault();
+        if (string.IsNullOrEmpty(organizationId))
+        {
+            return BadRequest("OrganizationId header is required");
+        }
+
+        // Implementation with organization filtering
+        return Ok();
     }
 }
 ```
@@ -485,6 +740,14 @@ public class NewController : ControllerBase
 - **Token Validation**: Always validate issuer, audience, and signature
 - **Claim Verification**: Verify required claims are present
 - **HTTPS Only**: Never transmit tokens over HTTP
+- **Organization Isolation**: Always validate OrganizationId header
+
+### 2. Multi-Tenant Security
+
+- **Header Validation**: Always validate OrganizationId header presence
+- **Data Isolation**: Ensure all queries include organization filtering
+- **Access Control**: Verify user has access to the specified organization
+- **Audit Logging**: Log all cross-organization access attempts
 
 ### 2. Role-Based Access Control
 

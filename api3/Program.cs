@@ -1,5 +1,4 @@
 using api3.Extensions;
-using Finbuckle.MultiTenant;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +27,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseMultiTenant();
 // Add authentication middleware
 app.UseAuthentication();
 app.UseAuthorization();

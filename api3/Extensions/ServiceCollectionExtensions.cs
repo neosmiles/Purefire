@@ -2,7 +2,6 @@ using api3.Data;
 using api3.Models;
 using api3.Services;
 using api3.Services.IServices;
-using Finbuckle.MultiTenant;
 using Keycloak.AuthServices.Authentication;
 using Keycloak.AuthServices.Common;
 using Keycloak.AuthServices.Sdk;
@@ -10,6 +9,8 @@ using Keycloak.AuthServices.Sdk.Kiota;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
+using Newtonsoft.Json.Linq;
 using KeycloakAdminClientOptions = Keycloak.AuthServices.Sdk.KeycloakAdminClientOptions;
 
 namespace api3.Extensions;
@@ -21,22 +22,6 @@ public static class ServiceCollectionExtensions
         // Add DbContext
         services.AddDbContext<AuthDbContext>(options =>
             options.UseSqlServer(configuration.GetConnectionString("SqlServerConnection")));
-
-        #region finbuckle-multitenant
-        services.AddDbContext<TenantContext>(options =>
-            options.UseInMemoryDatabase("TenantConnection"));
-
-
-        //  Add Finbuckle.MultiTenant, pointing at DataContext as the EF store:
-        services.AddMultiTenant<TenantInfo>()
-            .WithEFCoreStore<TenantContext, TenantInfo>()
-            // .WithHeaderStrategy("X-Tenant-ID")
-            .WithClaimStrategy("organization")
-            //.WithHostStrategy()          // subdomain
-            // .WithRouteStrategy("{tenantId}")
-            .WithStaticStrategy("lg");
-        #endregion
-
 
 
         services.AddIdentity<AppUser, IdentityRole>()
@@ -55,7 +40,36 @@ public static class ServiceCollectionExtensions
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
             })
-            .AddKeycloakWebApi(configuration);
+            // .AddKeycloakWebApi(configuration); // This line is commented out to avoid conflicts with the next line
+            //  because it conflicts with the next line where I added the JwtBearerEvents to handle roles mapping for Keycloak clients
+            .AddKeycloakWebApi(configuration, options =>
+            {
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = context =>
+                    {
+                        if (context.Principal?.Identity is ClaimsIdentity claimsIdentity)
+                        {
+                            var realmRoles = context.Principal.FindFirst("realm_access")?.Value;
+                            if (!string.IsNullOrEmpty(realmRoles))
+                            {
+                                var parsed = JObject.Parse(realmRoles);
+                                var roles = parsed["roles"]?.ToObject<List<string>>();
+                                if (roles != null)
+                                {
+                                    foreach (var role in roles)
+                                        claimsIdentity.AddClaim(new Claim(ClaimTypes.Role, role));
+                                }
+                            }
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                };
+
+                // Ensure the role claim type is correctly mapped
+                options.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
+            });
 
 
         // Register our custom permission-based authorization

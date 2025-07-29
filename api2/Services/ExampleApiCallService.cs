@@ -33,6 +33,48 @@ public class ExampleApiCallService
         }
     }
 
+    public async Task<string> CallApiRoleAsync()
+    {
+        try
+        {
+            // The token will be automatically retrieved and added to the Authorization header
+            var response = await _httpClient.GetAsync("http://localhost:5007/Secured/Admin");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                return content;
+            }
+
+            return $"Error: {response.StatusCode}";
+        }
+        catch (Exception ex)
+        {
+            return $"Exception: {ex.Message}";
+        }
+    }
+
+    public async Task<string> CallApiScopedAsync()
+    {
+        try
+        {
+            // The token will be automatically retrieved and added to the Authorization header
+            var response = await _httpClient.GetAsync("http://localhost:5007/Secured/debug");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync();
+                return content;
+            }
+
+            return $"Error: {response.StatusCode}";
+        }
+        catch (Exception ex)
+        {
+            return $"Exception: {ex.Message}";
+        }
+    }
+
     public async Task<T> GetAsync<T>(string endpoint)
     {
         var response = await _httpClient.GetAsync(endpoint);
