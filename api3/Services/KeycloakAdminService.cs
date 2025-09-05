@@ -63,6 +63,25 @@ public class KeycloakAdminService(KeycloakAdminApiClient adminApiClient, IConfig
         await adminApiClient.Admin.Realms[_defaultRealm].Users[userId].RoleMappings.Realm.PostAsync(roles);
     }
 
+    public async Task<bool> RemoveRoleFromUserAsync(string userId, RoleRepresentation role)
+    {
+        try
+        {
+            var roles = new List<RoleRepresentation> { role };
+            await adminApiClient.Admin.Realms[_defaultRealm].Users[userId].RoleMappings.Realm.DeleteAsync(roles);
+            return true;
+        }
+        catch (ApiException ex) when (ex.ResponseStatusCode == 400 || ex.ResponseStatusCode == 404)
+        {
+            // Nothing to remove or not found
+            return false;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     public async Task<RoleRepresentation> GetRoleByNameAsync(string roleName)
     {
         return await adminApiClient.Admin.Realms[_defaultRealm].Roles[roleName].GetAsync() ?? new();
@@ -157,6 +176,8 @@ public class KeycloakAdminService(KeycloakAdminApiClient adminApiClient, IConfig
             return new OrganizationRepresentation();
         }
     }
+
+
 
     public async Task<bool> CreateOrganizationAsync(OrganizationRepresentation organizationRepresentation)
     {

@@ -1,0 +1,33 @@
+@api1_HostAddress = http://localhost:5165
+
+GET {{api1_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+# Test organization header middleware - without header
+GET {{api1_HostAddress}}/api/data/test-organization-header
+Accept: application/json
+
+###
+
+# Test organization header middleware - with organization name (will be transformed to ID)
+GET {{api1_HostAddress}}/api/data/test-organization-header
+Accept: application/json
+organizationId: Test Organization
+
+###
+
+# Test organization header middleware - with short name (will be transformed to ID)
+GET {{api1_HostAddress}}/api/data/test-organization-header
+Accept: application/json
+organizationId: TestOrg
+
+###
+
+# Test organization header middleware - with non-existent organization (header unchanged)
+GET {{api1_HostAddress}}/api/data/test-organization-header
+Accept: application/json
+organizationId: NonExistentOrg
+
+###

@@ -72,12 +72,20 @@ public class KeycloakOrganizationController(IKeycloakAdminService keycloakAdmin,
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<OrganizationRepresentation>>> GetOrganizations()
+    public async Task<ActionResult<IEnumerable<OrganizationResponse>>> GetOrganizations()
     {
         try
         {
             var organizations = await keycloakAdmin.GetOrganizationsAsync();
-            return Ok(organizations);
+            var response = organizations.Select(org => new OrganizationResponse
+            {
+                Id = org.Id,
+                Name = org.Name,
+                Description = org.Description,
+                Enabled = org.Enabled,
+                Domains = org.Domains?.Select(domain => domain.Name).ToList()
+            });
+            return Ok(response);
         }
         catch (Exception ex)
         {
@@ -87,7 +95,7 @@ public class KeycloakOrganizationController(IKeycloakAdminService keycloakAdmin,
     }
 
     [HttpGet("{organizationId}")]
-    public async Task<ActionResult<OrganizationRepresentation>> GetOrganization(string organizationId)
+    public async Task<ActionResult<OrganizationResponse>> GetOrganization(string organizationId)
     {
         try
         {
@@ -96,7 +104,17 @@ public class KeycloakOrganizationController(IKeycloakAdminService keycloakAdmin,
             {
                 return NotFound($"Organization with ID '{organizationId}' not found.");
             }
-            return Ok(organization);
+
+            var response = new OrganizationResponse
+            {
+                Id = organization.Id,
+                Name = organization.Name,
+                Description = organization.Description,
+                Enabled = organization.Enabled,
+                Domains = organization.Domains?.Select(domain => domain.Name).ToList()
+            };
+
+            return Ok(response);
         }
         catch (Exception ex)
         {
@@ -105,17 +123,60 @@ public class KeycloakOrganizationController(IKeycloakAdminService keycloakAdmin,
         }
     }
 
-    [HttpPost]
-    public async Task<IActionResult> CreateOrganization(OrganizationRepresentation organizationRepresentation)
+    [HttpGet("by-name/{organizationName}")]
+    public async Task<ActionResult<OrganizationResponse>> GetOrganizationByName(string organizationName)
     {
         try
         {
+            var organizations = await keycloakAdmin.GetOrganizationsAsync();
+            var organization = organizations?.FirstOrDefault(org =>
+                string.Equals(org.Name, organizationName, StringComparison.OrdinalIgnoreCase));
+
+            if (organization == null || string.IsNullOrEmpty(organization.Id))
+            {
+                return NotFound($"Organization with name '{organizationName}' not found.");
+            }
+
+            var response = new OrganizationResponse
+            {
+                Id = organization.Id,
+                Name = organization.Name,
+                Description = organization.Description,
+                Enabled = organization.Enabled,
+                Domains = organization.Domains?.Select(domain => domain.Name).ToList()
+            };
+
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error retrieving organization {OrganizationName}", organizationName);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<OrganizationResponse>> CreateOrganization([FromBody] CreateOrganizationDto createOrganizationDto)
+    {
+        try
+        {
+            var organizationRepresentation = new OrganizationRepresentation
+            {
+                Name = createOrganizationDto.Name,
+                Description = createOrganizationDto.Description,
+                Domains = createOrganizationDto.Domains?.Select(domain => new OrganizationDomainRepresentation { Name = domain }).ToList()
+            };
+
             var result = await keycloakAdmin.CreateOrganizationAsync(organizationRepresentation);
             if (!result)
             {
                 return BadRequest("Failed to create organization");
             }
-            return CreatedAtAction(nameof(GetOrganization), new { organizationId = organizationRepresentation.Id }, organizationRepresentation);
+
+            var organizationResult = await GetOrganizationByName(createOrganizationDto.Name!);
+            return organizationResult;
+
+
         }
         catch (Exception ex)
         {
@@ -124,93 +185,20 @@ public class KeycloakOrganizationController(IKeycloakAdminService keycloakAdmin,
         }
     }
 
-    /* [HttpGet("debug/organizations")]
-    public async Task<ActionResult> DebugOrganizations()
+
+    public class CreateOrganizationDto
     {
-        try
-        {
-            logger.LogInformation("Fetching all organizations for debugging...");
-            var organizations = await keycloakAdmin.GetOrganizationsAsync();
-
-            var debugInfo = new
-            {
-                TotalCount = organizations.Count(),
-                Organizations = organizations.Select(org => new
-                {
-                    Id = org.Id,
-                    Name = org.Name,
-                    Description = org.Description
-                }).ToList()
-            };
-
-            logger.LogInformation("Found {Count} organizations: {Organizations}",
-                debugInfo.TotalCount,
-                string.Join(", ", debugInfo.Organizations.Select(o => $"{o.Name} (ID: {o.Id})")));
-
-            return Ok(debugInfo);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error debugging organizations");
-            return StatusCode(500, "Internal server error");
-        }
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public List<string>? Domains { get; set; }
     }
 
-    [HttpGet("debug/organization/{organizationId}/check")]
-    public async Task<ActionResult> CheckOrganizationExists(string organizationId)
+    public class OrganizationResponse
     {
-        try
-        {
-            logger.LogInformation("Checking if organization '{OrganizationId}' exists...", organizationId);
-
-            var organization = await keycloakAdmin.GetOrganizationByIdAsync(organizationId);
-            var exists = organization != null && !string.IsNullOrEmpty(organization.Id);
-
-            var result = new
-            {
-                OrganizationId = organizationId,
-                Exists = exists,
-                Organization = exists ? new
-                {
-                    Id = organization?.Id,
-                    Name = organization?.Name,
-                    Description = organization?.Description
-                } : null
-            };
-
-            logger.LogInformation("Organization '{OrganizationId}' exists: {Exists}", organizationId, exists);
-
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error checking organization {OrganizationId}", organizationId);
-            return StatusCode(500, "Internal server error");
-        }
+        public string? Id { get; set; }
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public bool? Enabled { get; set; }
+        public List<string>? Domains { get; set; }
     }
-
-    [HttpGet("debug/config")]
-    public ActionResult DebugConfig(IConfiguration config)
-    {
-        try
-        {
-            var configInfo = new
-            {
-                Realm = config["Keycloak:realm"],
-                AuthServerUrl = config["Keycloak:auth-server-url"],
-                AdminRealm = config["KeycloakAdmin:realm"],
-                AdminAuthServerUrl = config["KeycloakAdmin:auth-server-url"]
-            };
-
-            logger.LogInformation("Keycloak configuration: Realm={Realm}, AuthServer={AuthServer}, AdminRealm={AdminRealm}",
-                configInfo.Realm, configInfo.AuthServerUrl, configInfo.AdminRealm);
-
-            return Ok(configInfo);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error getting configuration info");
-            return StatusCode(500, "Internal server error");
-        }
-    } */
 }

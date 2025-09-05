@@ -1,6 +1,5 @@
-using api3.Models;
 using api3.Services.IServices;
-using Keycloak.AuthServices.Sdk.Admin.Models;
+using Keycloak.AuthServices.Sdk.Kiota.Admin.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,7 +11,7 @@ namespace api3.Controllers;
 public class UserController(IAppUserService appUserService, ILogger<UserController> logger) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<AppUser>>> GetUsers()
+    public async Task<ActionResult<IEnumerable<UserRepresentation>>> GetUsers()
     {
         try
         {
@@ -21,13 +20,13 @@ public class UserController(IAppUserService appUserService, ILogger<UserControll
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error retrieving app users");
+            logger.LogError(ex, "Error retrieving Keycloak users");
             return StatusCode(500, "Internal server error");
         }
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<AppUser>> GetUser(string id)
+    public async Task<ActionResult<UserRepresentation>> GetUser(string id)
     {
         try
         {
@@ -40,33 +39,13 @@ public class UserController(IAppUserService appUserService, ILogger<UserControll
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error retrieving app user {UserId}", id);
+            logger.LogError(ex, "Error retrieving keycloak user {UserId}", id);
             return StatusCode(500, "Internal server error");
         }
     }
-
-    [HttpGet("keycloakuser/{id}")]
-    public async Task<ActionResult<UserRepresentation>> GetKeycloakUser(string id)
-    {
-        try
-        {
-            var user = await appUserService.GetUserByKeycloakUserIdAsync(id);
-            if (user == null)
-            {
-                return NotFound();
-            }
-            return Ok(user);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error retrieving app user {UserId}", id);
-            return StatusCode(500, "Internal server error");
-        }
-    }
-
 
     [HttpPost]
-    public async Task<ActionResult<AppUser>> CreateUser(string tenantId, AppUserCreateDto userDto)
+    public async Task<ActionResult<UserRepresentation>> CreateUser(string tenantId, UserRepresentation userDto)
     {
         if (string.IsNullOrWhiteSpace(tenantId))
         {
@@ -75,38 +54,28 @@ public class UserController(IAppUserService appUserService, ILogger<UserControll
 
         try
         {
-            var newUser = new AppUser
-            {
-                UserName = userDto.Username,
-                Email = userDto.Email,
-                FirstName = userDto.FirstName,
-                LastName = userDto.LastName,
-            };
-
-            var createdUser = await appUserService.CreateUserAsync(newUser, userDto.Password, userDto.OrganizationId);
+            var createdUser = await appUserService.CreateUserAsync(userDto, organizationId: userDto.Attributes?.AdditionalData?.ContainsKey("organization") == true ? userDto.Attributes.AdditionalData["organization"]?.ToString() : null);
             return CreatedAtAction(nameof(GetUser), new { id = createdUser.Id }, createdUser);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("Organization") && ex.Message.Contains("not found"))
         {
-            // Handle organization not found errors specifically
             logger.LogWarning(ex, "Organization not found when creating user for tenant {TenantId}. User creation may have succeeded but organization assignment failed.", tenantId);
             return BadRequest($"Organization assignment failed: {ex.Message}");
         }
         catch (InvalidOperationException ex)
         {
-            // Handle other known operational exceptions
-            logger.LogError(ex, "Invalid operation when creating app user for tenant {TenantId}", tenantId);
+            logger.LogError(ex, "Invalid operation when creating keycloak user for tenant {TenantId}", tenantId);
             return BadRequest(ex.Message);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error creating app user for tenant {TenantId}", tenantId);
+            logger.LogError(ex, "Error creating keycloak user for tenant {TenantId}", tenantId);
             return StatusCode(500, "Internal server error");
         }
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateUser(string id, AppUserUpdateDto userDto)
+    public async Task<IActionResult> UpdateUser(string id, UserRepresentation userDto)
     {
         try
         {
@@ -116,20 +85,12 @@ public class UserController(IAppUserService appUserService, ILogger<UserControll
                 return NotFound();
             }
 
-            // Update user properties
-            existingUser.UserName = userDto.Username ?? existingUser.UserName;
-            existingUser.Email = userDto.Email ?? existingUser.Email;
-            existingUser.FirstName = userDto.FirstName ?? existingUser.FirstName;
-            existingUser.LastName = userDto.LastName ?? existingUser.LastName;
-            existingUser.Enabled = userDto.Enabled ?? existingUser.Enabled;
-            existingUser.EmailConfirmed = userDto.EmailConfirmed ?? existingUser.EmailConfirmed;
-
-            await appUserService.UpdateUserAsync(existingUser);
+            await appUserService.UpdateUserAsync(id, userDto);
             return NoContent();
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error updating app user {UserId}", id);
+            logger.LogError(ex, "Error updating keycloak user {UserId}", id);
             return StatusCode(500, "Internal server error");
         }
     }
@@ -150,151 +111,64 @@ public class UserController(IAppUserService appUserService, ILogger<UserControll
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error deleting app user {UserId}", id);
+            logger.LogError(ex, "Error deleting keycloak user {UserId}", id);
             return StatusCode(500, "Internal server error");
         }
     }
 
 
 
-    // --- New ASP.NET Core Identity Role Management Endpoints ---
+    // --- Realm role (Keycloak) management endpoints ---
 
-    [HttpPost("identity-roles")]
+    [HttpPost("realm-roles")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> CreateAspNetRole([FromBody] AspNetRoleRequestDto roleDto)
+    public async Task<IActionResult> CreateRealmRole([FromBody] AspNetRoleRequestDto roleDto)
     {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-        try
-        {
-            var result = await appUserService.CreateAspNetRoleAsync(roleDto.RoleName);
-            if (result.Succeeded)
-            {
-                logger.LogInformation("ASP.NET Identity Role {RoleName} created successfully.", roleDto.RoleName);
-                return Ok($"Role '{roleDto.RoleName}' created successfully.");
-            }
-            logger.LogWarning("Failed to create ASP.NET Identity Role {RoleName}. Errors: {Errors}", roleDto.RoleName, string.Join(", ", result.Errors.Select(e => e.Description)));
-            return BadRequest(result.Errors);
-        }
-        catch (ArgumentException ex)
-        {
-            logger.LogError(ex, "Error creating ASP.NET Identity role: {RoleName}", roleDto.RoleName);
-            return BadRequest(ex.Message);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error creating ASP.NET Identity role: {RoleName}", roleDto.RoleName);
-            return StatusCode(500, "Internal server error while creating ASP.NET Identity role.");
-        }
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var ok = await appUserService.CreateRealmRoleAsync(roleDto.RoleName);
+        if (ok) return Ok($"Role '{roleDto.RoleName}' created in Keycloak.");
+        return BadRequest("Failed to create role in Keycloak.");
     }
 
-    [HttpGet("identity-roles")]
-    [ProducesResponseType(typeof(IEnumerable<Microsoft.AspNetCore.Identity.IdentityRole>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAllAspNetRoles()
+    [HttpGet("realm-roles")]
+    public async Task<IActionResult> GetAllRealmRoles()
     {
-        try
-        {
-            var roles = await appUserService.GetAllAspNetRolesAsync();
-            return Ok(roles);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error retrieving all ASP.NET Identity roles.");
-            return StatusCode(500, "Internal server error");
-        }
+        var roles = await appUserService.GetAllRealmRolesAsync();
+        return Ok(roles);
     }
 
-    [HttpGet("{userId}/identity-roles")]
-    [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserAspNetRoles(string userId)
+    [HttpGet("{userId}/realm-roles")]
+    public async Task<IActionResult> GetUserRealmRoles(string userId)
     {
-        try
-        {
-            // First, check if user exists to return a proper 404 if not.
-            var user = await appUserService.GetUserByIdAsync(userId);
-            if (user == null)
-            {
-                logger.LogWarning("User with ID {UserId} not found when trying to get ASP.NET Identity roles.", userId);
-                return NotFound($"User with ID '{userId}' not found.");
-            }
-            var roles = await appUserService.GetUserAspNetRolesAsync(userId);
-            return Ok(roles);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error retrieving ASP.NET Identity roles for user {UserId}.", userId);
-            return StatusCode(500, "Internal server error");
-        }
+        var user = await appUserService.GetUserByIdAsync(userId);
+        if (user == null) return NotFound();
+        var roles = await appUserService.GetUserRealmRolesAsync(user.Id ?? string.Empty);
+        return Ok(roles);
     }
 
-    [HttpPost("{userId}/identity-roles")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> AssignAspNetRoleToUser(string userId, [FromBody] AspNetRoleRequestDto roleDto)
+    [HttpPost("{userId}/realm-roles")]
+    public async Task<IActionResult> AssignRealmRoleToUser(string userId, [FromBody] AspNetRoleRequestDto roleDto)
     {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-        try
-        {
-            var result = await appUserService.AssignAspNetRoleToUserAsync(userId, roleDto.RoleName);
-            if (result.Succeeded)
-            {
-                logger.LogInformation("Successfully assigned ASP.NET Identity role {RoleName} to user {UserId}.", roleDto.RoleName, userId);
-                return Ok($"Role '{roleDto.RoleName}' assigned to user '{userId}'.");
-            }
-            // Check if failure was due to user not found to return 404
-            if (result.Errors.Any(e => e.Description.Contains($"User with ID '{userId}' not found")))
-            {
-                logger.LogWarning("Attempted to assign role {RoleName} to non-existent user {UserId}.", roleDto.RoleName, userId);
-                return NotFound($"User with ID '{userId}' not found.");
-            }
-            logger.LogWarning("Failed to assign ASP.NET Identity role {RoleName} to user {UserId}. Errors: {Errors}", roleDto.RoleName, userId, string.Join(", ", result.Errors.Select(e => e.Description)));
-            return BadRequest(result.Errors);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error assigning ASP.NET Identity role {RoleName} to user {UserId}.", roleDto.RoleName, userId);
-            return StatusCode(500, "Internal server error");
-        }
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var user = await appUserService.GetUserByIdAsync(userId);
+        if (user == null) return NotFound();
+        var ok = await appUserService.AssignRealmRoleToUserAsync(user.Id ?? string.Empty, roleDto.RoleName);
+        if (ok) return Ok($"Role '{roleDto.RoleName}' assigned to user.");
+        return BadRequest("Failed to assign role in Keycloak.");
     }
 
-    [HttpDelete("{userId}/identity-roles")]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveAspNetRoleFromUser(string userId, [FromBody] AspNetRoleRequestDto roleDto)
+    [HttpDelete("{userId}/realm-roles")]
+    public async Task<IActionResult> RemoveRealmRoleFromUser(string userId, [FromBody] AspNetRoleRequestDto roleDto)
     {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-        try
-        {
-            var result = await appUserService.RemoveAspNetRoleFromUserAsync(userId, roleDto.RoleName);
-            if (result.Succeeded)
-            {
-                logger.LogInformation("Successfully removed ASP.NET Identity role {RoleName} from user {UserId}.", roleDto.RoleName, userId);
-                return Ok($"Role '{roleDto.RoleName}' removed from user '{userId}'.");
-            }
-            if (result.Errors.Any(e => e.Description.Contains($"User with ID '{userId}' not found")))
-            {
-                logger.LogWarning("Attempted to remove role {RoleName} from non-existent user {UserId}.", roleDto.RoleName, userId);
-                return NotFound($"User with ID '{userId}' not found.");
-            }
-            logger.LogWarning("Failed to remove ASP.NET Identity role {RoleName} from user {UserId}. Errors: {Errors}", roleDto.RoleName, userId, string.Join(", ", result.Errors.Select(e => e.Description)));
-            return BadRequest(result.Errors);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error removing ASP.NET Identity role {RoleName} from user {UserId}.", roleDto.RoleName, userId);
-            return StatusCode(500, "Internal server error");
-        }
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+        var user = await appUserService.GetUserByIdAsync(userId);
+        if (user == null) return NotFound();
+        var ok = await appUserService.RemoveRealmRoleFromUserAsync(user.Id ?? string.Empty, roleDto.RoleName);
+        if (ok) return Ok($"Role '{roleDto.RoleName}' removed from user.");
+        return BadRequest("Failed to remove role in Keycloak.");
     }
+
+    // DTO used by the role endpoints
+    public record AspNetRoleRequestDto(string RoleName);
 }

@@ -22,7 +22,7 @@ public static class SwaggerExtensions
                     >()
                     ?.Get(JwtBearerDefaults.AuthenticationScheme)!;
 
-                document.Title = "Purefire API Identity";
+                document.Title = "Purefire API Core";
 
                 document.AddSecurity(
                     OpenIdConnectDefaults.AuthenticationScheme,

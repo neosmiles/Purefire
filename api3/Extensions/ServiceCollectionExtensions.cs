@@ -4,6 +4,7 @@ using api3.Services;
 using api3.Services.IServices;
 using Keycloak.AuthServices.Authentication;
 using Keycloak.AuthServices.Common;
+using Keycloak.AuthServices.Authorization;
 using Keycloak.AuthServices.Sdk;
 using Keycloak.AuthServices.Sdk.Kiota;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -24,9 +25,16 @@ public static class ServiceCollectionExtensions
             options.UseSqlServer(configuration.GetConnectionString("SqlServerConnection")));
 
 
-        services.AddIdentity<AppUser, IdentityRole>()
-            .AddEntityFrameworkStores<AuthDbContext>()
-            .AddDefaultTokenProviders();
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddKeycloakWebApi(configuration);
+
+        // Let Keycloak handle authorization entirely
+        services.AddAuthorization()
+            .AddKeycloakAuthorization()
+            .AddAuthorizationServer(configuration);
+
+
+
 
         #region Keycloak
         var adminSection = "KeycloakAdmin";
@@ -34,49 +42,7 @@ public static class ServiceCollectionExtensions
         var adminClient = "admin-api";
         var protectionClient = "protection";
 
-        // Configure Keycloak authentication as the primary scheme
-        services.AddAuthentication(options =>
-            {
-                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-            })
-            // .AddKeycloakWebApi(configuration); // This line is commented out to avoid conflicts with the next line
-            //  because it conflicts with the next line where I added the JwtBearerEvents to handle roles mapping for Keycloak clients
-            .AddKeycloakWebApi(configuration, options =>
-            {
-                options.Events = new JwtBearerEvents
-                {
-                    OnTokenValidated = context =>
-                    {
-                        if (context.Principal?.Identity is ClaimsIdentity claimsIdentity)
-                        {
-                            var realmRoles = context.Principal.FindFirst("realm_access")?.Value;
-                            if (!string.IsNullOrEmpty(realmRoles))
-                            {
-                                var parsed = JObject.Parse(realmRoles);
-                                var roles = parsed["roles"]?.ToObject<List<string>>();
-                                if (roles != null)
-                                {
-                                    foreach (var role in roles)
-                                        claimsIdentity.AddClaim(new Claim(ClaimTypes.Role, role));
-                                }
-                            }
-                        }
 
-                        return Task.CompletedTask;
-                    }
-                };
-
-                // Ensure the role claim type is correctly mapped
-                options.TokenValidationParameters.RoleClaimType = ClaimTypes.Role;
-            });
-
-
-        // Register our custom permission-based authorization
-        //services.AddPermissionsAuthorization();
-
-        // Still add Keycloak authorization for backward compatibility
-        //services.AddKeycloakAuthorization();
 
 
         // Register Kiota-generated HttpClient for Keycloak Admin API operations
@@ -132,9 +98,7 @@ public static class ServiceCollectionExtensions
 
         // Add Auth Service
         services.AddScoped<IAppUserService, AppUserService>();
-        services.AddScoped<IUserSyncService, UserSyncService>();
         services.AddScoped<IKeycloakAdminService, KeycloakAdminService>();
-        services.AddMemoryCache();
 
         return services;
     }

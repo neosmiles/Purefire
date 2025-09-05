@@ -1,23 +1,20 @@
-using api3.Models;
 using Keycloak.AuthServices.Sdk.Kiota.Admin.Models;
 
 namespace api3.Services.IServices;
 
 public interface IAppUserService
 {
-    Task<IEnumerable<AppUser>> GetAllUsersAsync();
-    Task<AppUser?> GetUserByIdAsync(string id);
-    Task<UserRepresentation> GetUserByKeycloakUserIdAsync(string keycloakUserId);
-    Task<AppUser> CreateUserAsync(AppUser user, string? password = null, string? organizationId = null);
-    Task UpdateUserAsync(AppUser user);
-    Task DeleteUserAsync(string id);
+    // Keycloak users only (UserRepresentation is the Keycloak SDK model)
+    Task<IEnumerable<UserRepresentation>> GetAllUsersAsync();
+    Task<UserRepresentation?> GetUserByIdAsync(string keycloakUserId);
+    Task<UserRepresentation> CreateUserAsync(UserRepresentation user, string? password = null, string? organizationId = null);
+    Task UpdateUserAsync(string keycloakUserId, UserRepresentation user);
+    Task DeleteUserAsync(string keycloakUserId);
 
-
-
-    // New ASP.NET Core Identity Role Management Methods
-    Task<Microsoft.AspNetCore.Identity.IdentityResult> CreateAspNetRoleAsync(string roleName);
-    Task<IEnumerable<string>> GetUserAspNetRolesAsync(string userId);
-    Task<IEnumerable<Microsoft.AspNetCore.Identity.IdentityRole>> GetAllAspNetRolesAsync();
-    Task<Microsoft.AspNetCore.Identity.IdentityResult> AssignAspNetRoleToUserAsync(string userId, string roleName);
-    Task<Microsoft.AspNetCore.Identity.IdentityResult> RemoveAspNetRoleFromUserAsync(string userId, string roleName);
+    // Role management via Keycloak Admin API
+    Task<bool> CreateRealmRoleAsync(string roleName);
+    Task<IEnumerable<string>> GetUserRealmRolesAsync(string keycloakUserId);
+    Task<IEnumerable<string>> GetAllRealmRolesAsync();
+    Task<bool> AssignRealmRoleToUserAsync(string keycloakUserId, string roleName);
+    Task<bool> RemoveRealmRoleFromUserAsync(string keycloakUserId, string roleName);
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using api3.Attributes;
 
 namespace api3.Controllers;
 
@@ -60,6 +61,36 @@ public class SecuredController : ControllerBase
             AllClaims = claims,
             RoleClaims = roles,
             IsInAdminRole = User.IsInRole("Admin")
+        });
+    }
+
+    /// <summary>
+    /// Example endpoint using UMA permission check via RPT
+    /// This requires the user to have 'read' permission on 'vehicle' resource
+    /// </summary>
+    [HttpGet("vehicles")]
+    [RequirePermission("vehicle", "read")]
+    public IActionResult GetVehicles()
+    {
+        return Ok(new
+        {
+            Message = "Vehicle data accessible via UMA permission",
+            User = User.Identity?.Name,
+            Data = new[] { "Vehicle 1", "Vehicle 2", "Vehicle 3" }
+        });
+    }
+
+    /// <summary>
+    /// Example endpoint requiring write permission on organization resource
+    /// </summary>
+    [HttpPost("organizations")]
+    [RequirePermission("organization", "write")]
+    public IActionResult CreateOrganization([FromBody] object data)
+    {
+        return Ok(new
+        {
+            Message = "Organization creation allowed via UMA permission",
+            User = User.Identity?.Name
         });
     }
 }

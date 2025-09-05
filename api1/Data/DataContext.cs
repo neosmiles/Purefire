@@ -1,10 +1,13 @@
+using api1.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace api3.Data;
+namespace api1.Data;
 
-public class AuthDbContext(DbContextOptions<AuthDbContext> options) : DbContext(options)
+public class DataContext(DbContextOptions<DataContext> options) : DbContext(options)
 {
     // Local persistence is minimized. Keycloak is the source of truth for users.
+
+    public DbSet<Organization> Organizations { get; set; } = null!;
 
     #region Model Configuration
     protected override void OnModelCreating(ModelBuilder builder)

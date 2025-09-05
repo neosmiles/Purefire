@@ -13,6 +13,7 @@ public interface IKeycloakAdminService
     Task DeleteUserAsync(string userId);
     Task CreateRoleAsync(RoleRepresentation roleRepresentation);
     Task AssignRoleToUserAsync(string userId, RoleRepresentation role);
+    Task<bool> RemoveRoleFromUserAsync(string userId, RoleRepresentation role);
     Task<RoleRepresentation> GetRoleByNameAsync(string roleName);
     Task<IEnumerable<RoleRepresentation>> GetRolesAsync();
     Task<bool> AddUserToOrganizationAsync(string userId, string organizationId);
@@ -20,6 +21,7 @@ public interface IKeycloakAdminService
     Task<bool> RemoveUserFromOrganizationAsync(string userId, string organizationId);
     Task<IEnumerable<OrganizationRepresentation>> GetOrganizationsAsync();
     Task<OrganizationRepresentation> GetOrganizationByIdAsync(string organizationId);
+
     Task<bool> CreateOrganizationAsync(OrganizationRepresentation organizationRepresentation);
     // Task UpdateUserAttributesAsync(string userId, UserRepresentation_attributes? attributes);
     Task UpdateUserAttributesAsync(string userId, Dictionary<string, object> attributes);
