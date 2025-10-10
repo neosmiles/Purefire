@@ -1,4 +1,4 @@
-﻿using Keycloak.AuthServices.Authentication;
+﻿    using Keycloak.AuthServices.Authentication;
 using Keycloak.AuthServices.Common;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -24,6 +24,7 @@ public static class SwaggerExtensions
 
                 document.Title = "Purefire API Core";
 
+                // Add OpenID Connect security scheme (existing)
                 document.AddSecurity(
                     OpenIdConnectDefaults.AuthenticationScheme,
                     [],
@@ -34,8 +35,26 @@ public static class SwaggerExtensions
                     }
                 );
 
+                // Add JWT Bearer security scheme for manual token input
+                document.AddSecurity(
+                    JwtBearerDefaults.AuthenticationScheme,
+                    [],
+                    new OpenApiSecurityScheme
+                    {
+                        Type = OpenApiSecuritySchemeType.Http,
+                        Scheme = "bearer",
+                        BearerFormat = "JWT",
+                        Description = "Enter your JWT token in the text input below.\n\nExample: \"your-jwt-token-here\""
+                    }
+                );
+
+                // Add operation processors for both schemes
                 document.OperationProcessors.Add(
                     new OperationSecurityScopeProcessor(OpenIdConnectDefaults.AuthenticationScheme)
+                );
+                
+                document.OperationProcessors.Add(
+                    new OperationSecurityScopeProcessor(JwtBearerDefaults.AuthenticationScheme)
                 );
             }
         );

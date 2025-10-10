@@ -30,7 +30,7 @@ public static class SwaggerExtensions
                     new OpenApiSecurityScheme
                     {
                         Type = OpenApiSecuritySchemeType.OpenIdConnect,
-                        OpenIdConnectUrl = "https://keycloak.etraffika.com.ng/realms/etraffika/.well-known/openid-configuration" //keycloakOptions.OpenIdConnectUrl,
+                        OpenIdConnectUrl = /* "https://keycloak.etraffika.com.ng/realms/etraffika/.well-known/openid-configuration" */ keycloakOptions.OpenIdConnectUrl,
                     }
                 );
 
